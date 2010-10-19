@@ -12,6 +12,8 @@ module Network.Mail.Mime
       -- * Sending messages
     , sendmail
     , renderSendMail
+      -- * High-level 'Mail' creation
+    , simpleMail
       -- * Utilities
     , randomString
     ) where
@@ -26,8 +28,10 @@ import System.Process
 import System.IO
 import System.Exit
 import Codec.Binary.Base64 (encode)
-import Control.Monad ((<=<))
+import Control.Monad ((<=<), forM)
 import Data.List (intersperse)
+import qualified Data.Text.Lazy as LT
+import qualified Data.Text.Lazy.Encoding as LT
 
 -- | Generates a random sequence of alphanumerics of the given length.
 randomString :: RandomGen d => Int -> d -> (String, d)
@@ -195,3 +199,34 @@ sendmail lbs = do
 -- | Render an email message and send via 'sendmail'.
 renderSendMail :: Mail -> IO ()
 renderSendMail = sendmail <=< renderMail'
+
+-- | A simple interface for generating an email with HTML and plain-text
+-- alternatives and some file attachments.
+--
+-- Note that we use lazy IO for reading in the attachment contents.
+simpleMail :: String -- ^ to
+           -> String -- ^ from
+           -> String -- ^ subject
+           -> LT.Text -- ^ plain body
+           -> LT.Text -- ^ HTML body
+           -> [(String, FilePath)] -- ^ content type and path of attachments
+           -> IO Mail
+simpleMail to from subject plainBody htmlBody attachments = do
+    as <- forM attachments $ \(ct, fn) -> do
+        content <- L.readFile fn
+        return (ct, fn, content)
+    return Mail {
+        mailHeaders =
+            [ ("To", to)
+            , ("From", from)
+            , ("Subject", subject)
+            ]
+        , mailParts =
+            [ Part "text/plain; charset=utf-8" None Nothing
+            $ LT.encodeUtf8 plainBody
+            , Part "text/html; charset=utf-8" None Nothing
+            $ LT.encodeUtf8 htmlBody
+            ] :
+            (map (\(ct, fn, content) -> [Part ct Base64 (Just fn) content])
+                              as)
+        }

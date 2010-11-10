@@ -19,8 +19,8 @@ module Network.Mail.Mime
     ) where
 
 import qualified Data.ByteString.Lazy as L
-import Text.Blaze.Builder.Utf8
-import Text.Blaze.Builder.Core
+import Blaze.ByteString.Builder.Char.Utf8
+import Blaze.ByteString.Builder
 import Data.Monoid
 import System.Random
 import Control.Arrow
@@ -32,6 +32,7 @@ import Control.Monad ((<=<), forM)
 import Data.List (intersperse)
 import qualified Data.Text.Lazy as LT
 import qualified Data.Text.Lazy.Encoding as LT
+import Data.ByteString.Char8 ()
 
 -- | Generates a random sequence of alphanumerics of the given length.
 randomString :: RandomGen d => Int -> d -> (String, d)
@@ -102,8 +103,8 @@ partToPair (Part contentType encoding disposition content) =
       $ []
     builder =
         case encoding of
-            None -> writeList writeByteString $ L.toChunks content
-            Base64 -> writeList writeByte $ map (toEnum . fromEnum)
+            None -> fromWrite16List writeByteString $ L.toChunks content
+            Base64 -> fromWrite16List writeWord8 $ map (toEnum . fromEnum)
                     $ encode $ L.unpack content
 
 showPairs :: RandomGen g

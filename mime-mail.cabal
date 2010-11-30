@@ -1,5 +1,5 @@
 Name:                mime-mail
-Version:             0.0.0.2
+Version:             0.0.0.3
 Synopsis:            Compose MIME email messages.
 Description:         This package provides some high-level datatypes for declaring MIME email messages, functions for automatically composing these into bytestrings, and the ability to send bytestrings via the sendmail executable. You can also use any other library you wish to send via different methods, eg directly to SMTP.
 Homepage:            http://github.com/snoyberg/mime-mail
@@ -22,7 +22,7 @@ Library
                  , random              >= 1.0        && < 1.1
                  , blaze-builder       >= 0.2        && < 0.3
                  , bytestring          >= 0.9.1      && < 0.10
-                 , text                >= 0.7        && < 0.11
+                 , text                >= 0.7        && < 0.12
 
 source-repository head
   type:     git

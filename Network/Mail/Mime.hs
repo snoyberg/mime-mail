@@ -57,7 +57,8 @@ instance Random Boundary where
 
 -- | An entire mail message.
 data Mail = Mail
-    { mailHeaders :: [(String, String)] -- ^ All headers, including to, from subject.
+    { -- | All headers, including to, from subject.
+      mailHeaders :: [(String, String)]
     -- | A list of different sets of alternatives. As a concrete example:
     --
     -- > mailParts = [ [textVersion, htmlVersion], [attachment1], [attachment1]]
@@ -81,6 +82,7 @@ data Part = Part
     -- | The filename for this part, if it is to be sent with an attachemnt
     -- disposition.
     , partFilename :: Maybe String
+    , partHeaders :: [(String, String)]
     , partContent :: L.ByteString
     }
 
@@ -88,7 +90,7 @@ type Headers = [(String, String)]
 type Pair = (Headers, Builder)
 
 partToPair :: Part -> Pair
-partToPair (Part contentType encoding disposition content) =
+partToPair (Part contentType encoding disposition headers content) =
     (headers, builder)
   where
     headers =
@@ -100,7 +102,7 @@ partToPair (Part contentType encoding disposition content) =
             Nothing -> id
             Just fn ->
                 (:) ("Content-Disposition", "attachment; filename=" ++ fn))
-      $ []
+      $ headers
     builder =
         case encoding of
             None -> fromWrite16List writeByteString $ L.toChunks content
@@ -223,11 +225,11 @@ simpleMail to from subject plainBody htmlBody attachments = do
             , ("Subject", subject)
             ]
         , mailParts =
-            [ Part "text/plain; charset=utf-8" None Nothing
+            [ Part "text/plain; charset=utf-8" None Nothing []
             $ LT.encodeUtf8 plainBody
-            , Part "text/html; charset=utf-8" None Nothing
+            , Part "text/html; charset=utf-8" None Nothing []
             $ LT.encodeUtf8 htmlBody
             ] :
-            (map (\(ct, fn, content) -> [Part ct Base64 (Just fn) content])
-                              as)
+            (map (\(ct, fn, content) ->
+                    [Part ct Base64 (Just fn) [] content]) as)
         }

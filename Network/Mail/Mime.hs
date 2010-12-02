@@ -91,9 +91,9 @@ type Pair = (Headers, Builder)
 
 partToPair :: Part -> Pair
 partToPair (Part contentType encoding disposition headers content) =
-    (headers, builder)
+    (headers', builder)
   where
-    headers =
+    headers' =
         ((:) ("Content-Type", contentType))
       $ (case encoding of
             None -> id

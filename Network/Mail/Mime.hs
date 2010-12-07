@@ -16,6 +16,7 @@ module Network.Mail.Mime
     , simpleMail
       -- * Utilities
     , randomString
+    , quotedPrintable
     ) where
 
 import qualified Data.ByteString.Lazy as L
@@ -33,6 +34,7 @@ import Data.List (intersperse)
 import qualified Data.Text.Lazy as LT
 import qualified Data.Text.Lazy.Encoding as LT
 import Data.ByteString.Char8 ()
+import Data.Bits ((.&.), shiftR)
 
 -- | Generates a random sequence of alphanumerics of the given length.
 randomString :: RandomGen d => Int -> d -> (String, d)
@@ -233,3 +235,34 @@ simpleMail to from subject plainBody htmlBody attachments = do
             (map (\(ct, fn, content) ->
                     [Part ct Base64 (Just fn) [] content]) as)
         }
+
+-- | The first parameter denotes whether the input should be treated as text.
+-- If treated as text, then CRs will be stripped and LFs output as CRLFs. If
+-- binary, then CRs and LFs will be escaped.
+quotedPrintable :: Bool -> L.ByteString -> L.ByteString
+quotedPrintable isText lbs =
+    toLazyByteString finalBuilder
+  where
+    (finalBuilder, _) = L.foldl' go (mempty, 0) lbs
+    go (front, lineLen) w =
+        (front `mappend` b, lineLen')
+      where
+        (lineLen', b)
+            | w == 13 && isText = (lineLen, mempty) -- CR
+            | w == 10 && isText = (0, fromByteString "\r\n")
+            | w == 61 = helper 3 $ fromByteString "=3D"
+            | 33 <= w && w <= 126 = helper 1 $ fromWord8 w
+            | (w == 9 || w == 0x20) && lineLen < 75 = helper 1 $ fromWord8 w
+            | w == 9 = (0, fromByteString "=09=\r\n")
+            | w == 0x20 = (0, fromByteString "=20=\r\n")
+            | otherwise = helper 3 $ escape w
+        helper newLen bs
+            | newLen + lineLen > 78 =
+                (0, bs `mappend` fromByteString "=\r\n")
+            | otherwise = (newLen + lineLen, bs)
+        escape w = hex (w `shiftR` 16) `mappend` hex (w .&. 0x15)
+        hex w
+            | w < 10 = fromWord8 $ w + 48
+            | otherwise = fromWord8 $ w + 55
+
+-- FIXME encoded word for headers

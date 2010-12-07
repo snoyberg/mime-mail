@@ -147,9 +147,9 @@ renderMail g0 (Mail headers parts) =
     helper :: g -> [g -> (x, g)] -> ([x], g)
     helper g [] = ([], g)
     helper g (x:xs) =
-        let (b, g') = x g
-            (bs, g'') = helper g' xs
-         in (b : bs, g'')
+        let (b, g_) = x g
+            (bs, g__) = helper g_ xs
+         in (b : bs, g__)
     ((finalHeaders, finalBuilder), g'') = showPairs "mixed" pairs' g'
     builder = mconcat
         [ mconcat $ map showHeader headers
@@ -159,6 +159,7 @@ renderMail g0 (Mail headers parts) =
         , finalBuilder
         ]
 
+showHeader :: (String, String) -> Builder
 showHeader (k, v) = mconcat
     [ fromString k
     , fromByteString ": "
@@ -166,6 +167,7 @@ showHeader (k, v) = mconcat
     , fromByteString "\n"
     ]
 
+showBoundPart :: Boundary -> ([(String, String)], Builder) -> Builder
 showBoundPart (Boundary b) (headers, content) = mconcat
     [ fromByteString "--"
     , fromString b
@@ -175,6 +177,7 @@ showBoundPart (Boundary b) (headers, content) = mconcat
     , content
     ]
 
+showBoundEnd :: Boundary -> Builder
 showBoundEnd (Boundary b) = mconcat
     [ fromByteString "\n--"
     , fromString b
@@ -243,7 +246,7 @@ quotedPrintable :: Bool -> L.ByteString -> L.ByteString
 quotedPrintable isText lbs =
     toLazyByteString finalBuilder
   where
-    (finalBuilder, _) = L.foldl' go (mempty, 0) lbs
+    (finalBuilder, _) = L.foldl' go (mempty, 0 :: Int) lbs
     go (front, lineLen) w =
         (front `mappend` b, lineLen')
       where
@@ -255,14 +258,14 @@ quotedPrintable isText lbs =
             | (w == 9 || w == 0x20) && lineLen < 75 = helper 1 $ fromWord8 w
             | w == 9 = (0, fromByteString "=09=\r\n")
             | w == 0x20 = (0, fromByteString "=20=\r\n")
-            | otherwise = helper 3 $ escape w
+            | otherwise = helper 3 escaped
         helper newLen bs
             | newLen + lineLen > 78 =
                 (0, bs `mappend` fromByteString "=\r\n")
             | otherwise = (newLen + lineLen, bs)
-        escape w = hex (w `shiftR` 16) `mappend` hex (w .&. 0x15)
-        hex w
-            | w < 10 = fromWord8 $ w + 48
-            | otherwise = fromWord8 $ w + 55
+        escaped = hex (w `shiftR` 16) `mappend` hex (w .&. 0x15)
+        hex x
+            | x < 10 = fromWord8 $ x + 48
+            | otherwise = fromWord8 $ x + 55
 
 -- FIXME encoded word for headers

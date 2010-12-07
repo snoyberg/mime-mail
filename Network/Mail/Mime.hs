@@ -71,7 +71,7 @@ data Mail = Mail
     }
 
 -- | How to encode a single part. You should use 'Base64' for binary data.
-data Encoding = None | Base64
+data Encoding = None | Base64 | QuotedPrintableText | QuotedPrintableBinary
 
 -- | Multiple alternative representations of the same data. For example, you
 -- could provide a plain-text and HTML version of a message.
@@ -99,7 +99,11 @@ partToPair (Part contentType encoding disposition headers content) =
         ((:) ("Content-Type", contentType))
       $ (case encoding of
             None -> id
-            Base64 -> (:) ("Content-Transfer-Encoding", "base64"))
+            Base64 -> (:) ("Content-Transfer-Encoding", "base64")
+            QuotedPrintableText ->
+                (:) ("Content-Transfer-Encoding", "quoted-printable")
+            QuotedPrintableBinary ->
+                (:) ("Content-Transfer-Encoding", "quoted-printable"))
       $ (case disposition of
             Nothing -> id
             Just fn ->
@@ -110,6 +114,8 @@ partToPair (Part contentType encoding disposition headers content) =
             None -> fromWrite16List writeByteString $ L.toChunks content
             Base64 -> fromWrite16List writeWord8 $ map (toEnum . fromEnum)
                     $ encode $ L.unpack content
+            QuotedPrintableText -> quotedPrintable True content
+            QuotedPrintableBinary -> quotedPrintable False content
 
 showPairs :: RandomGen g
           => String -- ^ multipart type, eg mixed, alternative
@@ -230,9 +236,9 @@ simpleMail to from subject plainBody htmlBody attachments = do
             , ("Subject", subject)
             ]
         , mailParts =
-            [ Part "text/plain; charset=utf-8" None Nothing []
+            [ Part "text/plain; charset=utf-8" QuotedPrintableText Nothing []
             $ LT.encodeUtf8 plainBody
-            , Part "text/html; charset=utf-8" None Nothing []
+            , Part "text/html; charset=utf-8" QuotedPrintableText Nothing []
             $ LT.encodeUtf8 htmlBody
             ] :
             (map (\(ct, fn, content) ->
@@ -242,11 +248,10 @@ simpleMail to from subject plainBody htmlBody attachments = do
 -- | The first parameter denotes whether the input should be treated as text.
 -- If treated as text, then CRs will be stripped and LFs output as CRLFs. If
 -- binary, then CRs and LFs will be escaped.
-quotedPrintable :: Bool -> L.ByteString -> L.ByteString
+quotedPrintable :: Bool -> L.ByteString -> Builder
 quotedPrintable isText lbs =
-    toLazyByteString finalBuilder
+    fst $ L.foldl' go (mempty, 0 :: Int) lbs
   where
-    (finalBuilder, _) = L.foldl' go (mempty, 0 :: Int) lbs
     go (front, lineLen) w =
         (front `mappend` b, lineLen')
       where

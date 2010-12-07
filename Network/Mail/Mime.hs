@@ -268,7 +268,8 @@ quotedPrintable isText lbs =
             | newLen + lineLen > 78 =
                 (0, bs `mappend` fromByteString "=\r\n")
             | otherwise = (newLen + lineLen, bs)
-        escaped = hex (w `shiftR` 16) `mappend` hex (w .&. 0x15)
+        escaped = fromWord8 61 `mappend` hex (w `shiftR` 4)
+                               `mappend` hex (w .&. 15)
         hex x
             | x < 10 = fromWord8 $ x + 48
             | otherwise = fromWord8 $ x + 55

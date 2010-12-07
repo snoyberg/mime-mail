@@ -35,6 +35,8 @@ import qualified Data.Text.Lazy as LT
 import qualified Data.Text.Lazy.Encoding as LT
 import Data.ByteString.Char8 ()
 import Data.Bits ((.&.), shiftR)
+import Data.Char (isAscii)
+import Data.Word (Word8)
 
 -- | Generates a random sequence of alphanumerics of the given length.
 randomString :: RandomGen d => Int -> d -> (String, d)
@@ -169,9 +171,14 @@ showHeader :: (String, String) -> Builder
 showHeader (k, v) = mconcat
     [ fromString k
     , fromByteString ": "
-    , fromString v
+    , v''
     , fromByteString "\n"
     ]
+  where
+   v' = LT.pack v
+   v'' = if needsEncodedWord v'
+            then encodedWord v'
+            else fromLazyText v'
 
 showBoundPart :: Boundary -> ([(String, String)], Builder) -> Builder
 showBoundPart (Boundary b) (headers, content) = mconcat
@@ -270,8 +277,29 @@ quotedPrintable isText lbs =
             | otherwise = (newLen + lineLen, bs)
         escaped = fromWord8 61 `mappend` hex (w `shiftR` 4)
                                `mappend` hex (w .&. 15)
-        hex x
-            | x < 10 = fromWord8 $ x + 48
-            | otherwise = fromWord8 $ x + 55
 
--- FIXME encoded word for headers
+hex :: Word8 -> Builder
+hex x
+    | x < 10 = fromWord8 $ x + 48
+    | otherwise = fromWord8 $ x + 55
+
+needsEncodedWord :: LT.Text -> Bool
+needsEncodedWord = not . LT.all isAscii
+
+encodedWord :: LT.Text -> Builder
+encodedWord t = mconcat
+    [ fromByteString "=?utf-8?Q?"
+    , L.foldl' go mempty $ LT.encodeUtf8 t
+    , fromByteString "?="
+    ]
+  where
+    go front w = front `mappend` go' w
+    go' 32 = fromWord8 95
+    go' 95 = go'' 95
+    go' 63 = go'' 63
+    go' 61 = go'' 61
+    go' w
+        | 33 <= w && w <= 126 = fromWord8 w
+        | otherwise = go'' w
+    go'' w = fromWord8 61 `mappend` hex (w `shiftR` 4)
+                          `mappend` hex (w .&. 15)

@@ -22,6 +22,7 @@ module Network.Mail.Mime
 import qualified Data.ByteString.Lazy as L
 import Blaze.ByteString.Builder.Char.Utf8
 import Blaze.ByteString.Builder
+import Blaze.ByteString.Builder.Internal.Write (fromWriteList)
 import Data.Monoid
 import System.Random
 import Control.Arrow
@@ -113,8 +114,8 @@ partToPair (Part contentType encoding disposition headers content) =
       $ headers
     builder =
         case encoding of
-            None -> fromWrite16List writeByteString $ L.toChunks content
-            Base64 -> fromWrite16List writeWord8 $ map (toEnum . fromEnum)
+            None -> fromWriteList writeByteString $ L.toChunks content
+            Base64 -> fromWriteList writeWord8 $ map (toEnum . fromEnum)
                     $ encode $ L.unpack content
             QuotedPrintableText -> quotedPrintable True content
             QuotedPrintableBinary -> quotedPrintable False content

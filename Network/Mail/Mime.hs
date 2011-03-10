@@ -38,6 +38,7 @@ import Data.ByteString.Char8 ()
 import Data.Bits ((.&.), shiftR)
 import Data.Char (isAscii)
 import Data.Word (Word8)
+import qualified Data.Ascii as A
 
 -- | Generates a random sequence of alphanumerics of the given length.
 randomString :: RandomGen d => Int -> d -> (String, d)
@@ -63,7 +64,7 @@ instance Random Boundary where
 -- | An entire mail message.
 data Mail = Mail
     { -- | All headers, including to, from subject.
-      mailHeaders :: [(String, String)]
+      mailHeaders :: [(A.Ascii, String)]
     -- | A list of different sets of alternatives. As a concrete example:
     --
     -- > mailParts = [ [textVersion, htmlVersion], [attachment1], [attachment1]]
@@ -86,12 +87,12 @@ data Part = Part
     , partEncoding :: Encoding
     -- | The filename for this part, if it is to be sent with an attachemnt
     -- disposition.
-    , partFilename :: Maybe String
-    , partHeaders :: [(String, String)]
+    , partFilename :: Maybe FilePath
+    , partHeaders :: [(A.Ascii, String)]
     , partContent :: L.ByteString
     }
 
-type Headers = [(String, String)]
+type Headers = [(A.Ascii, String)]
 type Pair = (Headers, Builder)
 
 partToPair :: Part -> Pair
@@ -168,9 +169,9 @@ renderMail g0 (Mail headers parts) =
         , finalBuilder
         ]
 
-showHeader :: (String, String) -> Builder
+showHeader :: (A.Ascii, String) -> Builder
 showHeader (k, v) = mconcat
-    [ fromString k
+    [ fromByteString $ A.toByteString k
     , fromByteString ": "
     , v''
     , fromByteString "\n"
@@ -181,7 +182,7 @@ showHeader (k, v) = mconcat
             then encodedWord v'
             else fromLazyText v'
 
-showBoundPart :: Boundary -> ([(String, String)], Builder) -> Builder
+showBoundPart :: Boundary -> ([(A.Ascii, String)], Builder) -> Builder
 showBoundPart (Boundary b) (headers, content) = mconcat
     [ fromByteString "--"
     , fromString b

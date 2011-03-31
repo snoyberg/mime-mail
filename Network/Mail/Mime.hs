@@ -38,7 +38,10 @@ import Data.ByteString.Char8 ()
 import Data.Bits ((.&.), shiftR)
 import Data.Char (isAscii)
 import Data.Word (Word8)
-import qualified Data.Ascii as A
+import qualified Data.ByteString as S
+import Data.Text (Text)
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
 
 -- | Generates a random sequence of alphanumerics of the given length.
 randomString :: RandomGen d => Int -> d -> (String, d)
@@ -56,15 +59,15 @@ randomString len =
         | otherwise = toEnum $ i + fromEnum '0' - 52
 
 -- | MIME boundary between parts of a message.
-newtype Boundary = Boundary { unBoundary :: String }
+newtype Boundary = Boundary { unBoundary :: Text }
 instance Random Boundary where
     randomR = const random
-    random = first Boundary . randomString 10
+    random = first (Boundary . T.pack) . randomString 10
 
 -- | An entire mail message.
 data Mail = Mail
     { -- | All headers, including to, from subject.
-      mailHeaders :: [(A.Ascii, String)]
+      mailHeaders :: [(S.ByteString, Text)]
     -- | A list of different sets of alternatives. As a concrete example:
     --
     -- > mailParts = [ [textVersion, htmlVersion], [attachment1], [attachment1]]
@@ -83,16 +86,16 @@ type Alternatives = [Part]
 
 -- | A single part of a multipart message.
 data Part = Part
-    { partType :: String -- ^ content type
+    { partType :: Text -- ^ content type
     , partEncoding :: Encoding
     -- | The filename for this part, if it is to be sent with an attachemnt
     -- disposition.
-    , partFilename :: Maybe FilePath
-    , partHeaders :: [(A.Ascii, String)]
+    , partFilename :: Maybe Text
+    , partHeaders :: Headers
     , partContent :: L.ByteString
     }
 
-type Headers = [(A.Ascii, String)]
+type Headers = [(S.ByteString, Text)]
 type Pair = (Headers, Builder)
 
 partToPair :: Part -> Pair
@@ -111,7 +114,8 @@ partToPair (Part contentType encoding disposition headers content) =
       $ (case disposition of
             Nothing -> id
             Just fn ->
-                (:) ("Content-Disposition", "attachment; filename=" ++ fn))
+                (:) ("Content-Disposition", "attachment; filename="
+                                            `T.append` fn))
       $ headers
     builder =
         case encoding of
@@ -122,7 +126,7 @@ partToPair (Part contentType encoding disposition headers content) =
             QuotedPrintableBinary -> quotedPrintable False content
 
 showPairs :: RandomGen g
-          => String -- ^ multipart type, eg mixed, alternative
+          => Text -- ^ multipart type, eg mixed, alternative
           -> [Pair]
           -> g
           -> (Pair, g)
@@ -133,7 +137,7 @@ showPairs mtype parts gen =
   where
     (Boundary b, gen') = random gen
     headers =
-        [ ("Content-Type", concat
+        [ ("Content-Type", T.concat
             [ "multipart/"
             , mtype
             , "; boundary=\""
@@ -169,23 +173,18 @@ renderMail g0 (Mail headers parts) =
         , finalBuilder
         ]
 
-showHeader :: (A.Ascii, String) -> Builder
+showHeader :: (S.ByteString, Text) -> Builder
 showHeader (k, v) = mconcat
-    [ fromByteString $ A.toByteString k
+    [ fromByteString k
     , fromByteString ": "
-    , v''
+    , if needsEncodedWord v then encodedWord v else fromText v
     , fromByteString "\n"
     ]
-  where
-   v' = LT.pack v
-   v'' = if needsEncodedWord v'
-            then encodedWord v'
-            else fromLazyText v'
 
-showBoundPart :: Boundary -> ([(A.Ascii, String)], Builder) -> Builder
+showBoundPart :: Boundary -> (Headers, Builder) -> Builder
 showBoundPart (Boundary b) (headers, content) = mconcat
     [ fromByteString "--"
-    , fromString b
+    , fromText b
     , fromByteString "\n"
     , mconcat $ map showHeader headers
     , fromByteString "\n"
@@ -195,7 +194,7 @@ showBoundPart (Boundary b) (headers, content) = mconcat
 showBoundEnd :: Boundary -> Builder
 showBoundEnd (Boundary b) = mconcat
     [ fromByteString "\n--"
-    , fromString b
+    , fromText b
     , fromByteString "--"
     ]
 
@@ -223,16 +222,18 @@ sendmail lbs = do
 renderSendMail :: Mail -> IO ()
 renderSendMail = sendmail <=< renderMail'
 
+-- FIXME usage of FilePath below can lead to issues with filename encoding
+
 -- | A simple interface for generating an email with HTML and plain-text
 -- alternatives and some file attachments.
 --
 -- Note that we use lazy IO for reading in the attachment contents.
-simpleMail :: String -- ^ to
-           -> String -- ^ from
-           -> String -- ^ subject
+simpleMail :: Text -- ^ to
+           -> Text -- ^ from
+           -> Text -- ^ subject
            -> LT.Text -- ^ plain body
            -> LT.Text -- ^ HTML body
-           -> [(String, FilePath)] -- ^ content type and path of attachments
+           -> [(Text, FilePath)] -- ^ content type and path of attachments
            -> IO Mail
 simpleMail to from subject plainBody htmlBody attachments = do
     as <- forM attachments $ \(ct, fn) -> do
@@ -251,7 +252,7 @@ simpleMail to from subject plainBody htmlBody attachments = do
             $ LT.encodeUtf8 htmlBody
             ] :
             (map (\(ct, fn, content) ->
-                    [Part ct Base64 (Just fn) [] content]) as)
+                    [Part ct Base64 (Just $ T.pack fn) [] content]) as)
         }
 
 -- | The first parameter denotes whether the input should be treated as text.
@@ -285,13 +286,13 @@ hex x
     | x < 10 = fromWord8 $ x + 48
     | otherwise = fromWord8 $ x + 55
 
-needsEncodedWord :: LT.Text -> Bool
-needsEncodedWord = not . LT.all isAscii
+needsEncodedWord :: Text -> Bool
+needsEncodedWord = not . T.all isAscii
 
-encodedWord :: LT.Text -> Builder
+encodedWord :: Text -> Builder
 encodedWord t = mconcat
     [ fromByteString "=?utf-8?Q?"
-    , L.foldl' go mempty $ LT.encodeUtf8 t
+    , S.foldl' go mempty $ TE.encodeUtf8 t
     , fromByteString "?="
     ]
   where

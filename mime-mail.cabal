@@ -1,5 +1,5 @@
 Name:                mime-mail
-Version:             0.3.0.1
+Version:             0.3.0.2
 Synopsis:            Compose MIME email messages.
 Description:         This package provides some high-level datatypes for declaring MIME email messages, functions for automatically composing these into bytestrings, and the ability to send bytestrings via the sendmail executable. You can also use any other library you wish to send via different methods, eg directly to SMTP.
 Homepage:            http://github.com/snoyberg/mime-mail
@@ -17,7 +17,7 @@ Cabal-version:       >=1.6
 Library
   Exposed-modules: Network.Mail.Mime
   Build-depends:   base                >= 4          && < 5
-                 , dataenc             >= 0.13.0.4   && < 0.15
+                 , dataenc             >= 0.14       && < 0.15
                  , process             >= 1.0        && < 1.1
                  , random              >= 1.0        && < 1.1
                  , blaze-builder       >= 0.2.1      && < 0.4

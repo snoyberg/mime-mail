@@ -42,6 +42,8 @@ import qualified Data.ByteString as S
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
+import qualified System.FilePath as FP
+
 
 -- | Generates a random sequence of alphanumerics of the given length.
 randomString :: RandomGen d => Int -> d -> (String, d)
@@ -225,6 +227,8 @@ renderSendMail = sendmail <=< renderMail'
 
 -- | A simple interface for generating an email with HTML and plain-text
 -- alternatives and some file attachments.
+-- Content ID gets set if you attach images. This means that you can
+-- use <img src="cid:nameoffilewithoutextension" /> in your HTML body.
 --
 -- Note that we use lazy IO for reading in the attachment contents.
 simpleMail :: Text -- ^ to
@@ -251,8 +255,12 @@ simpleMail to from subject plainBody htmlBody attachments = do
             $ LT.encodeUtf8 htmlBody
             ] :
             (map (\(ct, fn, content) ->
-                    [Part ct Base64 (Just $ T.pack fn) [] content]) as)
+                    [Part ct Base64 (Just $ T.pack (FP.takeFileName fn)) (contentid ct fn) content]) as)
         }
+  where
+    contentid ct fn = case (T.isPrefixOf "image/" ct) of
+                           True  -> [("Content-ID", T.concat ["<", T.pack (FP.takeBaseName fn) , ">"])]
+                           False -> []
 
 -- | The first parameter denotes whether the input should be treated as text.
 -- If treated as text, then CRs will be stripped and LFs output as CRLFs. If

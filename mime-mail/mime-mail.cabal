@@ -22,6 +22,7 @@ Library
                  , random              >= 1.0        && < 1.1
                  , blaze-builder       >= 0.2.1      && < 0.4
                  , bytestring          >= 0.9.1      && < 0.10
+                 , base64-bytestring   >= 0.1.0      && < 0.1.1
                  , text                >= 0.7        && < 0.12
 
 source-repository head

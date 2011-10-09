@@ -29,7 +29,7 @@ import Control.Arrow
 import System.Process
 import System.IO
 import System.Exit
-import qualified Codec.Binary.Base64 as Base64
+import qualified Data.ByteString.Base64 as Base64
 import Control.Monad ((<=<), forM)
 import Data.List (intersperse)
 import qualified Data.Text.Lazy as LT
@@ -120,7 +120,7 @@ partToPair (Part contentType encoding disposition headers content) =
     builder =
         case encoding of
             None -> fromWriteList writeByteString $ L.toChunks content
-            Base64 -> base64 content
+            Base64 -> fromWriteList writeByteString $ map Base64.encode (L.toChunks content)
             QuotedPrintableText -> quotedPrintable True content
             QuotedPrintableBinary -> quotedPrintable False content
 
@@ -306,14 +306,4 @@ encodedWord t = mconcat
     go'' w = fromWord8 61 `mappend` hex (w `shiftR` 4)
                           `mappend` hex (w .&. 15)
 
--- Encode data into base64. Base64.encode cannot be used here
--- because it suffers from stack overflow when used with larget input.
-base64 :: L.ByteString -> Builder
-base64 = go Base64.encodeInc . groupN 10 . L.unpack
-    where
-        go encoder [] = case encoder Base64.EDone of
-            Base64.EFinal str -> fromChar8String str
-        go encoder (chunk:rest) = case encoder $ Base64.EChunk chunk of
-            Base64.EPart str next -> fromChar8String str `mappend` go next rest
-        fromChar8String = fromWriteList writeWord8 . map (toEnum . fromEnum)
-        groupN n = map (take n) . takeWhile (not . null) . iterate (drop n)
+

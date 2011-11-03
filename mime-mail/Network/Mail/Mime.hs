@@ -218,7 +218,7 @@ showAddressHeader (k, as) =
 
 showAddress :: Address -> Builder
 showAddress a = mconcat
-    [ maybe mempty ((`mappend` fromByteString " ") . encodeIfNeeded) (addressName a)
+    [ maybe mempty ((`mappend` fromByteString " ") . encodedWord) (addressName a)
     , fromByteString "<"
     , fromText (addressEmail a)
     , fromByteString ">"
@@ -346,10 +346,27 @@ encodedWord t = mconcat
     ]
   where
     go front w = front `mappend` go' w
-    go' 32 = fromWord8 95
-    go' 95 = go'' 95
-    go' 63 = go'' 63
-    go' 61 = go'' 61
+    go' 32 = fromWord8 95 -- space
+    go' 95 = go'' 95 -- _
+    go' 63 = go'' 63 -- ?
+    go' 61 = go'' 61 -- =
+
+    -- The special characters from RFC 2822. Not all of these always give
+    -- problems, but at least @[];"<>, gave problems with some mail servers
+    -- when used in the 'name' part of an address.
+    go' 34 = go'' 34 -- "
+    go' 40 = go'' 40 -- (
+    go' 41 = go'' 41 -- )
+    go' 44 = go'' 44 -- ,
+    go' 46 = go'' 46 -- .
+    go' 58 = go'' 58 -- ;
+    go' 59 = go'' 59 -- ;
+    go' 60 = go'' 60 -- <
+    go' 62 = go'' 62 -- >
+    go' 64 = go'' 64 -- @
+    go' 91 = go'' 91 -- [
+    go' 92 = go'' 92 -- \
+    go' 93 = go'' 93 -- ]
     go' w
         | 33 <= w && w <= 126 = fromWord8 w
         | otherwise = go'' w

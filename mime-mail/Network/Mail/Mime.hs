@@ -3,6 +3,8 @@ module Network.Mail.Mime
     ( -- * Datatypes
       Boundary (..)
     , Mail (..)
+    , emptyMail
+    , Address (..)
     , Alternatives
     , Part (..)
     , Encoding (..)
@@ -66,8 +68,12 @@ instance Random Boundary where
 
 -- | An entire mail message.
 data Mail = Mail
-    { -- | All headers, including to, from subject.
-      mailHeaders :: [(S.ByteString, Text)]
+    { mailFrom :: Address
+    , mailTo   :: [Address]
+    , mailCc   :: [Address]
+    , mailBcc  :: [Address]
+    -- | Other headers, excluding from, to, cc and bcc.
+    , mailHeaders :: [(S.ByteString, Text)]
     -- | A list of different sets of alternatives. As a concrete example:
     --
     -- > mailParts = [ [textVersion, htmlVersion], [attachment1], [attachment1]]
@@ -75,6 +81,23 @@ data Mail = Mail
     -- Make sure when specifying alternatives to place the most preferred
     -- version last.
     , mailParts :: [Alternatives]
+    }
+
+-- | A mail message with the provided 'from' address and no other
+-- fields filled in.
+emptyMail :: Address -> Mail
+emptyMail from = Mail
+    { mailFrom    = from
+    , mailTo      = []
+    , mailCc      = []
+    , mailBcc     = []
+    , mailHeaders = []
+    , mailParts   = []
+    }
+
+data Address = Address
+    { addressName  :: Maybe Text
+    , addressEmail :: Text
     }
 
 -- | How to encode a single part. You should use 'Base64' for binary data.
@@ -152,9 +175,10 @@ showPairs mtype parts gen =
 
 -- | Render a 'Mail' with a given 'RandomGen' for producing boundaries.
 renderMail :: RandomGen g => g -> Mail -> (L.ByteString, g)
-renderMail g0 (Mail headers parts) =
+renderMail g0 (Mail from to cc bcc headers parts) =
     (toLazyByteString builder, g'')
   where
+    addressHeaders = map showAddressHeader [("From", [from]), ("To", to), ("Cc", cc), ("Bcc", bcc)]
     pairs = map (map partToPair) parts
     (pairs', g') = helper g0 $ map (showPairs "alternative") pairs
     helper :: g -> [g -> (x, g)] -> ([x], g)
@@ -165,7 +189,8 @@ renderMail g0 (Mail headers parts) =
          in (b : bs, g__)
     ((finalHeaders, finalBuilder), g'') = showPairs "mixed" pairs' g'
     builder = mconcat
-        [ mconcat $ map showHeader headers
+        [ mconcat addressHeaders
+        , mconcat $ map showHeader headers
         , showHeader ("MIME-Version", "1.0")
         , mconcat $ map showHeader finalHeaders
         , fromByteString "\n"
@@ -176,8 +201,27 @@ showHeader :: (S.ByteString, Text) -> Builder
 showHeader (k, v) = mconcat
     [ fromByteString k
     , fromByteString ": "
-    , if needsEncodedWord v then encodedWord v else fromText v
+    , encodeIfNeeded v
     , fromByteString "\n"
+    ]
+
+showAddressHeader :: (S.ByteString, [Address]) -> Builder
+showAddressHeader (k, as) =
+  if null as
+  then mempty
+  else mconcat
+    [ fromByteString k
+    , fromByteString ": "
+    , mconcat (intersperse (fromByteString ", ") . map showAddress $ as)
+    , fromByteString "\n"
+    ]
+
+showAddress :: Address -> Builder
+showAddress a = mconcat
+    [ maybe mempty ((`mappend` fromByteString " ") . encodedWord) (addressName a)
+    , fromByteString "<"
+    , fromText (addressEmail a)
+    , fromByteString ">"
     ]
 
 showBoundPart :: Boundary -> (Headers, Builder) -> Builder
@@ -227,8 +271,8 @@ renderSendMail = sendmail <=< renderMail'
 -- alternatives and some file attachments.
 --
 -- Note that we use lazy IO for reading in the attachment contents.
-simpleMail :: Text -- ^ to
-           -> Text -- ^ from
+simpleMail :: Address -- ^ to
+           -> Address -- ^ from
            -> Text -- ^ subject
            -> LT.Text -- ^ plain body
            -> LT.Text -- ^ HTML body
@@ -239,11 +283,11 @@ simpleMail to from subject plainBody htmlBody attachments = do
         content <- L.readFile fn
         return (ct, fn, content)
     return Mail {
-        mailHeaders =
-            [ ("To", to)
-            , ("From", from)
-            , ("Subject", subject)
-            ]
+          mailFrom = from
+        , mailTo   = [to]
+        , mailCc   = []
+        , mailBcc  = []
+        , mailHeaders = [ ("Subject", subject) ]
         , mailParts =
             [ Part "text/plain; charset=utf-8" QuotedPrintableText Nothing []
             $ LT.encodeUtf8 plainBody
@@ -285,6 +329,12 @@ hex x
     | x < 10 = fromWord8 $ x + 48
     | otherwise = fromWord8 $ x + 55
 
+encodeIfNeeded :: Text -> Builder
+encodeIfNeeded t =
+  if needsEncodedWord t
+  then encodedWord t
+  else fromText t
+
 needsEncodedWord :: Text -> Bool
 needsEncodedWord = not . T.all isAscii
 
@@ -296,10 +346,27 @@ encodedWord t = mconcat
     ]
   where
     go front w = front `mappend` go' w
-    go' 32 = fromWord8 95
-    go' 95 = go'' 95
-    go' 63 = go'' 63
-    go' 61 = go'' 61
+    go' 32 = fromWord8 95 -- space
+    go' 95 = go'' 95 -- _
+    go' 63 = go'' 63 -- ?
+    go' 61 = go'' 61 -- =
+
+    -- The special characters from RFC 2822. Not all of these always give
+    -- problems, but at least @[];"<>, gave problems with some mail servers
+    -- when used in the 'name' part of an address.
+    go' 34 = go'' 34 -- "
+    go' 40 = go'' 40 -- (
+    go' 41 = go'' 41 -- )
+    go' 44 = go'' 44 -- ,
+    go' 46 = go'' 46 -- .
+    go' 58 = go'' 58 -- ;
+    go' 59 = go'' 59 -- ;
+    go' 60 = go'' 60 -- <
+    go' 62 = go'' 62 -- >
+    go' 64 = go'' 64 -- @
+    go' 91 = go'' 91 -- [
+    go' 92 = go'' 92 -- \
+    go' 93 = go'' 93 -- ]
     go' w
         | 33 <= w && w <= 126 = fromWord8 w
         | otherwise = go'' w

@@ -3,6 +3,7 @@ module Network.Mail.Mime
     ( -- * Datatypes
       Boundary (..)
     , Mail (..)
+    , emptyMail
     , Address (..)
     , Alternatives
     , Part (..)
@@ -80,6 +81,18 @@ data Mail = Mail
     -- Make sure when specifying alternatives to place the most preferred
     -- version last.
     , mailParts :: [Alternatives]
+    }
+
+-- | A mail message with the provided 'from' address and no other
+-- fields filled in.
+emptyMail :: Address -> Mail
+emptyMail from = Mail
+    { mailFrom    = from
+    , mailTo      = []
+    , mailCc      = []
+    , mailBcc     = []
+    , mailHeaders = []
+    , mailParts   = []
     }
 
 data Address = Address

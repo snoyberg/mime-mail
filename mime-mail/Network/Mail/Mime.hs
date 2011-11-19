@@ -29,7 +29,7 @@ import Control.Arrow
 import System.Process
 import System.IO
 import System.Exit
-import qualified Codec.Binary.Base64 as Base64
+import qualified Data.ByteString.Base64 as Base64
 import Control.Monad ((<=<), forM)
 import Data.List (intersperse)
 import qualified Data.Text.Lazy as LT
@@ -42,6 +42,8 @@ import qualified Data.ByteString as S
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
+import qualified System.FilePath as FP
+
 
 -- | Generates a random sequence of alphanumerics of the given length.
 randomString :: RandomGen d => Int -> d -> (String, d)
@@ -120,7 +122,7 @@ partToPair (Part contentType encoding disposition headers content) =
     builder =
         case encoding of
             None -> fromWriteList writeByteString $ L.toChunks content
-            Base64 -> base64 content
+            Base64 -> fromWriteList writeByteString $ map Base64.encode (L.toChunks content)
             QuotedPrintableText -> quotedPrintable True content
             QuotedPrintableBinary -> quotedPrintable False content
 
@@ -225,6 +227,8 @@ renderSendMail = sendmail <=< renderMail'
 
 -- | A simple interface for generating an email with HTML and plain-text
 -- alternatives and some file attachments.
+-- Content ID gets set if you attach images. This means that you can
+-- use <img src="cid:nameoffilewithoutextension" /> in your HTML body.
 --
 -- Note that we use lazy IO for reading in the attachment contents.
 simpleMail :: Text -- ^ to
@@ -251,8 +255,12 @@ simpleMail to from subject plainBody htmlBody attachments = do
             $ LT.encodeUtf8 htmlBody
             ] :
             (map (\(ct, fn, content) ->
-                    [Part ct Base64 (Just $ T.pack fn) [] content]) as)
+                    [Part ct Base64 (Just $ T.pack (FP.takeFileName fn)) (contentid ct fn) content]) as)
         }
+  where
+    contentid ct fn = case (T.isPrefixOf "image/" ct) of
+                           True  -> [("Content-ID", T.concat ["<", T.pack (FP.takeBaseName fn) , ">"])]
+                           False -> []
 
 -- | The first parameter denotes whether the input should be treated as text.
 -- If treated as text, then CRs will be stripped and LFs output as CRLFs. If
@@ -306,14 +314,4 @@ encodedWord t = mconcat
     go'' w = fromWord8 61 `mappend` hex (w `shiftR` 4)
                           `mappend` hex (w .&. 15)
 
--- Encode data into base64. Base64.encode cannot be used here
--- because it suffers from stack overflow when used with larget input.
-base64 :: L.ByteString -> Builder
-base64 = go Base64.encodeInc . groupN 10 . L.unpack
-    where
-        go encoder [] = case encoder Base64.EDone of
-            Base64.EFinal str -> fromChar8String str
-        go encoder (chunk:rest) = case encoder $ Base64.EChunk chunk of
-            Base64.EPart str next -> fromChar8String str `mappend` go next rest
-        fromChar8String = fromWriteList writeWord8 . map (toEnum . fromEnum)
-        groupN n = map (take n) . takeWhile (not . null) . iterate (drop n)
+

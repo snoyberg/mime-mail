@@ -1,5 +1,5 @@
 Name:                mime-mail-ses
-Version:             0.0.0.3
+Version:             0.0.0.4
 Synopsis:            Send mime-mail messages via Amazon SES
 Homepage:            http://github.com/snoyberg/mime-mail-ses
 License:             BSD3
@@ -21,5 +21,5 @@ Library
                      , time               >= 1.1       && < 1.4
                      , old-locale
                      , http-enumerator    >= 0.6       && < 0.8
-                     , mime-mail          >= 0.3       && < 0.4
+                     , mime-mail          >= 0.3       && < 0.5
   ghc-options: -Wall

@@ -31,7 +31,8 @@ import Control.Arrow
 import System.Process
 import System.IO
 import System.Exit
-import qualified Codec.Binary.Base64 as Base64
+import System.FilePath (takeFileName)
+import Data.ByteString.Base64
 import Control.Monad ((<=<), forM)
 import Data.List (intersperse)
 import qualified Data.Text.Lazy as LT
@@ -295,7 +296,7 @@ simpleMail to from subject plainBody htmlBody attachments = do
             $ LT.encodeUtf8 htmlBody
             ] :
             (map (\(ct, fn, content) ->
-                    [Part ct Base64 (Just $ T.pack fn) [] content]) as)
+                    [Part ct Base64 (Just $ T.pack (takeFileName fn)) [] content]) as)
         }
 
 -- | The first parameter denotes whether the input should be treated as text.
@@ -375,6 +376,7 @@ encodedWord t = mconcat
 
 -- Encode data into base64. Base64.encode cannot be used here
 -- because it suffers from stack overflow when used with larget input.
+{-
 base64 :: L.ByteString -> Builder
 base64 = go Base64.encodeInc . groupN 10 . L.unpack
     where
@@ -384,3 +386,12 @@ base64 = go Base64.encodeInc . groupN 10 . L.unpack
             Base64.EPart str next -> fromChar8String str `mappend` go next rest
         fromChar8String = fromWriteList writeWord8 . map (toEnum . fromEnum)
         groupN n = map (take n) . takeWhile (not . null) . iterate (drop n)
+-}
+
+-- The funcion above doesn't split lines as expected by Email specifications.
+-- Moreover uses Strings instead of ByteStrings.
+base64 :: L.ByteString -> Builder
+base64 ls = fromByteString $ joinWith "\n" 76 $ encode bs
+    where
+	bs = S.concat $ L.toChunks ls
+

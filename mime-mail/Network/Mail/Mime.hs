@@ -375,13 +375,19 @@ encodedWord t = mconcat
                           `mappend` hex (w .&. 15)
 
 -- Encode data into base64. Base64.encode cannot be used here
--- because it suffers from stack overflow when used with larget input.
+-- because it suffers from stack overflow when used with large input.
 base64 :: L.ByteString -> Builder
-base64 = go Base64.encodeInc . groupN 10 . L.unpack
-    where
-        go encoder [] = case encoder Base64.EDone of
-            Base64.EFinal str -> fromChar8String str
-        go encoder (chunk:rest) = case encoder $ Base64.EChunk chunk of
-            Base64.EPart str next -> fromChar8String str `mappend` go next rest
-        fromChar8String = fromWriteList writeWord8 . map (toEnum . fromEnum)
-        groupN n = map (take n) . takeWhile (not . null) . iterate (drop n)
+base64 =
+    fromChar8String . addLines . go Base64.encodeInc . groupN 10 . L.unpack
+  where
+    go encoder [] = case encoder Base64.EDone of
+        Base64.EFinal str -> str
+    go encoder (chunk:rest) = case encoder $ Base64.EChunk chunk of
+        Base64.EPart str next -> str ++ go next rest
+    fromChar8String = fromWriteList writeWord8 . map (toEnum . fromEnum)
+    groupN n = map (take n) . takeWhile (not . null) . iterate (drop n)
+    addLines [] = []
+    addLines s =
+        a ++ '\r' : '\n' : addLines b
+      where
+        (a, b) = splitAt 76 s

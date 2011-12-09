@@ -13,7 +13,9 @@ module Network.Mail.Mime
     , renderMail'
       -- * Sending messages
     , sendmail
+    , sendmailCustom
     , renderSendMail
+    , renderSendMailCustom
       -- * High-level 'Mail' creation
     , simpleMail
       -- * Utilities
@@ -250,11 +252,25 @@ renderMail' m = do
     setStdGen g'
     return lbs
 
--- | Send a fully-formed email message via the sendmail executable.
+-- | Send a fully-formed email message via the default sendmail
+-- executable with default options.
 sendmail :: L.ByteString -> IO ()
-sendmail lbs = do
-    (Just hin, _, _, phandle) <- createProcess $ (proc
-        "/usr/sbin/sendmail" ["-t"]) { std_in = CreatePipe }
+sendmail = sendmailCustom "/usr/sbin/sendmail" ["-t"]
+
+-- | Render an email message and send via the default sendmail
+-- executable with default options.
+renderSendMail :: Mail -> IO ()
+renderSendMail = sendmail <=< renderMail'
+
+-- | Send a fully-formed email message via the specified sendmail
+-- executable with specified options.
+sendmailCustom :: FilePath        -- ^ sendmail executable path
+                  -> [String]     -- ^ sendmail command-line options
+                  -> L.ByteString -- ^ mail message as lazy bytestring
+                  -> IO ()
+sendmailCustom sm opts lbs = do
+    (Just hin, _, _, phandle) <- createProcess $ 
+                                 (proc sm opts) { std_in = CreatePipe }
     L.hPut hin lbs
     hClose hin
     exitCode <- waitForProcess phandle
@@ -262,9 +278,13 @@ sendmail lbs = do
         ExitSuccess -> return ()
         _ -> error $ "sendmail exited with error code " ++ show exitCode
 
--- | Render an email message and send via 'sendmail'.
-renderSendMail :: Mail -> IO ()
-renderSendMail = sendmail <=< renderMail'
+-- | Render an email message and send via the specified sendmail
+-- executable with specified options.
+renderSendMailCustom :: FilePath    -- ^ sendmail executable path
+                        -> [String] -- ^ sendmail command-line options
+                        -> Mail     -- ^ mail to render and send
+                        -> IO ()
+renderSendMailCustom sm opts = sendmailCustom sm opts <=< renderMail'
 
 -- FIXME usage of FilePath below can lead to issues with filename encoding
 

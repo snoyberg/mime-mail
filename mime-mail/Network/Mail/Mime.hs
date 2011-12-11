@@ -32,7 +32,7 @@ import System.Process
 import System.IO
 import System.Exit
 import System.FilePath (takeFileName)
-import qualified Codec.Binary.Base64 as Base64
+import qualified Data.ByteString.Base64 as Base64
 import Control.Monad ((<=<), forM)
 import Data.List (intersperse)
 import qualified Data.Text.Lazy as LT
@@ -374,20 +374,15 @@ encodedWord t = mconcat
     go'' w = fromWord8 61 `mappend` hex (w `shiftR` 4)
                           `mappend` hex (w .&. 15)
 
--- Encode data into base64. Base64.encode cannot be used here
--- because it suffers from stack overflow when used with large input.
+-- 57 bytes, when base64-encoded, becomes 76 characters.
+-- Perform the encoding 57-bytes at a time, and then append a newline.
 base64 :: L.ByteString -> Builder
-base64 =
-    fromChar8String . addLines . go Base64.encodeInc . groupN 10 . L.unpack
+base64 lbs
+    | L.null lbs = mempty
+    | otherwise = fromByteString x64 `mappend`
+                  fromByteString "\r\n" `mappend`
+                  base64 y
   where
-    go encoder [] = case encoder Base64.EDone of
-        Base64.EFinal str -> str
-    go encoder (chunk:rest) = case encoder $ Base64.EChunk chunk of
-        Base64.EPart str next -> str ++ go next rest
-    fromChar8String = fromWriteList writeWord8 . map (toEnum . fromEnum)
-    groupN n = map (take n) . takeWhile (not . null) . iterate (drop n)
-    addLines [] = []
-    addLines s =
-        a ++ '\r' : '\n' : addLines b
-      where
-        (a, b) = splitAt 76 s
+    (x', y) = L.splitAt 57 lbs
+    x = S.concat $ L.toChunks x'
+    x64 = Base64.encode x

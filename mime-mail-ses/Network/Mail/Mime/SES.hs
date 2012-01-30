@@ -1,16 +1,15 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 module Network.Mail.Mime.SES
     ( sendMailSES
     , renderSendMailSES
     , SES (..)
-    , SESException (..)
     ) where
 
 import Data.ByteString (ByteString)
 import Network.Mail.Mime (Mail, renderMail')
 import qualified Data.ByteString.Lazy as L
-import Network.HTTP.Enumerator
+import Network.HTTP.Conduit (httpLbs, Manager, parseUrl, queryString, requestHeaders)
+import Network.HTTP.Types (renderQuery)
 import Data.Time.Format (formatTime)
 import System.Locale (defaultTimeLocale)
 import Data.Time (getCurrentTime)
@@ -19,9 +18,8 @@ import Crypto.HMAC
 import Crypto.Hash.SHA256 (SHA256)
 import Data.ByteString.Base64 (encode)
 import qualified Data.Serialize as S
-import Control.Exception (Exception, throwIO)
-import Data.Typeable (Typeable)
-import Control.Monad (unless)
+import Control.Monad.Trans.Resource (ResourceIO, ResourceT)
+import Control.Monad.IO.Class (liftIO)
 
 data SES = SES
     { sesFrom :: ByteString
@@ -30,15 +28,15 @@ data SES = SES
     , sesSecretKey :: ByteString
     }
 
-renderSendMailSES :: SES -> Mail -> IO ()
-renderSendMailSES ses mail = renderMail' mail >>= sendMailSES ses
+renderSendMailSES :: ResourceIO m => Manager -> SES -> Mail -> ResourceT m ()
+renderSendMailSES m ses mail = liftIO (renderMail' mail) >>= sendMailSES m ses
 
-sendMailSES :: SES -> L.ByteString -> IO ()
-sendMailSES ses msg = do
-    now <- getCurrentTime
+sendMailSES :: ResourceIO m => Manager -> SES -> L.ByteString -> ResourceT m ()
+sendMailSES manager ses msg = do
+    now <- liftIO getCurrentTime
     let date = S8.pack $ format now
         sig = makeSig date $ sesSecretKey ses
-    req' <- parseUrl "https://email.us-east-1.amazonaws.com"
+    req' <- liftIO $ parseUrl "https://email.us-east-1.amazonaws.com"
     let auth = S8.concat
             [ "AWS3-HTTPS AWSAccessKeyId="
             , sesAccessKey ses
@@ -46,14 +44,14 @@ sendMailSES ses msg = do
             , sig
             ]
     let req = req'
-            { queryString = qs
+            { queryString = renderQuery False qs
             , requestHeaders =
                 [ ("Date", date)
                 , ("X-Amzn-Authorization", auth)
                 ]
             }
-    res <- withManager $ httpLbs req
-    unless (statusCode res == 200) $ throwIO $ SESException res
+    _ <- httpLbs req manager
+    return ()
   where
     qs =
           ("Action", Just "SendRawEmail")
@@ -72,7 +70,3 @@ makeSig payload key =
   where
     x :: SHA256
     x = undefined
-
-data SESException = SESException Response
-    deriving (Show, Typeable)
-instance Exception SESException

@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleContexts #-}
 module Network.Mail.Mime.SES
     ( sendMailSES
     , renderSendMailSES
@@ -18,7 +19,8 @@ import Crypto.HMAC
 import Crypto.Hash.SHA256 (SHA256)
 import Data.ByteString.Base64 (encode)
 import qualified Data.Serialize as S
-import Control.Monad.Trans.Resource (ResourceIO, ResourceT)
+import Control.Monad.Trans.Resource (MonadResource)
+import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.IO.Class (liftIO)
 
 data SES = SES
@@ -28,10 +30,10 @@ data SES = SES
     , sesSecretKey :: ByteString
     }
 
-renderSendMailSES :: ResourceIO m => Manager -> SES -> Mail -> ResourceT m ()
+renderSendMailSES :: (MonadBaseControl IO m, MonadResource m) => Manager -> SES -> Mail -> m ()
 renderSendMailSES m ses mail = liftIO (renderMail' mail) >>= sendMailSES m ses
 
-sendMailSES :: ResourceIO m => Manager -> SES -> L.ByteString -> ResourceT m ()
+sendMailSES :: (MonadBaseControl IO m, MonadResource m) => Manager -> SES -> L.ByteString -> m ()
 sendMailSES manager ses msg = do
     now <- liftIO getCurrentTime
     let date = S8.pack $ format now

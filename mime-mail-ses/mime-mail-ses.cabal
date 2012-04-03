@@ -1,14 +1,14 @@
 Name:                mime-mail-ses
-Version:             0.1.0.1
+Version:             0.2.0
 Synopsis:            Send mime-mail messages via Amazon SES
 Homepage:            http://github.com/snoyberg/mime-mail
-License:             BSD3
+License:             MIT
 License-file:        LICENSE
 Author:              Michael Snoyman
 Maintainer:          michael@snoyman.com
 Category:            Web
 Build-type:          Simple
-Cabal-version:       >=1.2
+Cabal-version:       >=1.6
 
 Library
   Exposed-modules:     Network.Mail.Mime.SES
@@ -20,9 +20,10 @@ Library
                      , bytestring         >= 0.9       && < 0.10
                      , time               >= 1.1
                      , old-locale
-                     , http-conduit       >= 1.2       && < 1.3
+                     , http-conduit       >= 1.4       && < 1.5
                      , mime-mail          >= 0.3       && < 0.5
-                     , conduit
+                     , resourcet          >= 0.3       && < 0.4
                      , transformers       >= 0.2
                      , http-types         >= 0.6.8     && < 0.7
+                     , monad-control      >= 0.3       && < 0.4
   ghc-options: -Wall

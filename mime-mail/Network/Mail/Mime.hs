@@ -331,15 +331,15 @@ quotedPrintable isText lbs =
       where
         (lineLen', b)
             | w == 13 && isText = (lineLen, mempty) -- CR
-            | w == 10 && isText = (0, fromByteString "\r\n")
-            | w == 61 = helper 3 $ fromByteString "=3D"
-            | 33 <= w && w <= 126 = helper 1 $ fromWord8 w
-            | (w == 9 || w == 0x20) && lineLen < 75 = helper 1 $ fromWord8 w
-            | w == 9 = (0, fromByteString "=09=\r\n")
-            | w == 0x20 = (0, fromByteString "=20=\r\n")
+            | w == 10 && isText = (0, fromByteString "\r\n") -- LF
+            | w == 61 = helper 3 $ fromByteString "=3D" -- equal sign
+            | 33 <= w && w <= 126 = helper 1 $ fromWord8 w -- printable character
+            | (w == 9 || w == 0x20) && lineLen < 71 = helper 1 $ fromWord8 w -- tab and space
+            | w == 9 = (0, fromByteString "=09=\r\n") -- tab
+            | w == 0x20 = (0, fromByteString "=20=\r\n") -- space
             | otherwise = helper 3 escaped
         helper newLen bs
-            | newLen + lineLen > 78 =
+            | newLen + lineLen > 74 =
                 (0, bs `mappend` fromByteString "=\r\n")
             | otherwise = (newLen + lineLen, bs)
         escaped = fromWord8 61 `mappend` hex (w `shiftR` 4)

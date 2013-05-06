@@ -319,31 +319,110 @@ simpleMail to from subject plainBody htmlBody attachments = do
                     [Part ct Base64 (Just $ T.pack (takeFileName fn)) [] content]) as)
         }
 
+data QP = QPPlain S.ByteString
+        | QPNewline
+        | QPTab
+        | QPSpace
+        | QPEscape S.ByteString
+
+data QPC = QPCCR
+         | QPCLF
+         | QPCSpace
+         | QPCTab
+         | QPCPlain
+         | QPCEscape
+    deriving Eq
+
+toQP :: Bool -- ^ text?
+     -> L.ByteString
+     -> [QP]
+toQP isText =
+    go
+  where
+    go lbs =
+        case L.uncons lbs of
+            Nothing -> []
+            Just (c, rest) ->
+                case toQPC c of
+                    QPCCR -> go rest
+                    QPCLF -> QPNewline : go rest
+                    QPCSpace -> QPSpace : go rest
+                    QPCTab -> QPTab : go rest
+                    QPCPlain ->
+                        let (x, y) = L.span ((== QPCPlain) . toQPC) lbs
+                         in QPPlain (toStrict x) : go y
+                    QPCEscape ->
+                        let (x, y) = L.span ((== QPCEscape) . toQPC) lbs
+                         in QPEscape (toStrict x) : go y
+
+    toStrict = S.concat . L.toChunks
+
+    toQPC :: Word8 -> QPC
+    toQPC 13 | isText = QPCCR
+    toQPC 10 | isText = QPCLF
+    toQPC 9 = QPCTab
+    toQPC 0x20 = QPCSpace
+    toQPC 61 = QPCEscape
+    toQPC w
+        | 33 <= w && w <= 126 = QPCPlain
+        | otherwise = QPCEscape
+
+buildQPs :: [QP] -> Builder
+buildQPs =
+    go (0 :: Int)
+  where
+    go _ [] = mempty
+    go currLine (qp:qps) =
+        case qp of
+            QPNewline -> copyByteString "\r\n" `mappend` go 0 qps
+            QPTab -> wsHelper (copyByteString "=09") (fromWord8 9)
+            QPSpace -> wsHelper (copyByteString "=20") (fromWord8 0x20)
+            QPPlain bs ->
+                let toTake = 75 - currLine
+                    (x, y) = S.splitAt toTake bs
+                    rest
+                        | S.null y = qps
+                        | otherwise = QPPlain y : qps
+                 in helper (S.length x) (copyByteString x) rest
+            QPEscape bs ->
+                let toTake = (75 - currLine) `div` 3
+                    (x, y) = S.splitAt toTake bs
+                    rest
+                        | S.null y = qps
+                        | otherwise = QPEscape y : qps
+                 in if toTake == 0
+                        then copyByteString "\r\n" `mappend` go 0 (qp:qps)
+                        else helper (S.length x * 3) (escape x) rest
+      where
+        escape =
+            S.foldl' add mempty
+          where
+            add builder w =
+                builder `mappend` escaped
+              where
+                escaped = fromWord8 61 `mappend` hex (w `shiftR` 4)
+                                       `mappend` hex (w .&. 15)
+
+        helper added builder rest =
+            builder' `mappend` go newLine rest
+           where
+             (newLine, builder')
+                | added + currLine >= 75 =
+                    (0, builder `mappend` copyByteString "=\r\n")
+                | otherwise = (added + currLine, builder)
+
+        wsHelper enc raw
+            | null qps =
+                if currLine <= 73
+                    then enc
+                    else copyByteString "\r\n=" `mappend` enc
+            | otherwise = helper 1 raw qps
+
 -- | The first parameter denotes whether the input should be treated as text.
 -- If treated as text, then CRs will be stripped and LFs output as CRLFs. If
 -- binary, then CRs and LFs will be escaped.
 quotedPrintable :: Bool -> L.ByteString -> Builder
-quotedPrintable isText lbs =
-    fst $ L.foldl' go (mempty, 0 :: Int) lbs
-  where
-    go (front, lineLen) w =
-        (front `mappend` b, lineLen')
-      where
-        (lineLen', b)
-            | w == 13 && isText = (lineLen, mempty) -- CR
-            | w == 10 && isText = (0, fromByteString "\r\n") -- LF
-            | w == 61 = helper 3 $ fromByteString "=3D" -- equal sign
-            | 33 <= w && w <= 126 = helper 1 $ fromWord8 w -- printable character
-            | (w == 9 || w == 0x20) && lineLen < 71 = helper 1 $ fromWord8 w -- tab and space
-            | w == 9 = (0, fromByteString "=09=\r\n") -- tab
-            | w == 0x20 = (0, fromByteString "=20=\r\n") -- space
-            | otherwise = helper 3 escaped
-        helper newLen bs
-            | newLen + lineLen > 74 =
-                (0, bs `mappend` fromByteString "=\r\n")
-            | otherwise = (newLen + lineLen, bs)
-        escaped = fromWord8 61 `mappend` hex (w `shiftR` 4)
-                               `mappend` hex (w .&. 15)
+quotedPrintable isText = buildQPs . toQP isText
 
 hex :: Word8 -> Builder
 hex x

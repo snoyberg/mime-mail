@@ -9,8 +9,7 @@ module Network.Mail.Mime.SES
 import Data.ByteString (ByteString)
 import Network.Mail.Mime (Mail, renderMail')
 import qualified Data.ByteString.Lazy as L
-import Network.HTTP.Conduit (httpLbs, Manager, parseUrl, queryString, requestHeaders)
-import Network.HTTP.Types (renderQuery)
+import Network.HTTP.Conduit (httpLbs, Manager, parseUrl, requestHeaders, urlEncodedBody)
 import Data.Time.Format (formatTime)
 import System.Locale (defaultTimeLocale)
 import Data.Time (getCurrentTime)
@@ -46,21 +45,20 @@ sendMailSES manager ses msg = do
             , sig
             ]
     let req = req'
-            { queryString = renderQuery False qs
-            , requestHeaders =
+            { requestHeaders =
                 [ ("Date", date)
                 , ("X-Amzn-Authorization", auth)
                 ]
             }
-    _ <- httpLbs req manager
+    _ <- flip httpLbs manager $ urlEncodedBody qs req
     return ()
   where
     qs =
-          ("Action", Just "SendRawEmail")
-        : ("Source", Just $ sesFrom ses)
-        : ("RawMessage.Data", Just $ encode $ S8.concat $ L.toChunks msg)
+          ("Action", "SendRawEmail")
+        : ("Source", sesFrom ses)
+        : ("RawMessage.Data", encode $ S8.concat $ L.toChunks msg)
         : zipWith mkDest [1 :: Int ..] (sesTo ses)
-    mkDest num addr = (S8.pack $ "Destinations.member." ++ show num, Just addr)
+    mkDest num addr = (S8.pack $ "Destinations.member." ++ show num, addr)
     format = formatTime defaultTimeLocale "%a, %e %b %Y %H:%M:%S %z"
 
 makeSig :: ByteString -> ByteString -> ByteString

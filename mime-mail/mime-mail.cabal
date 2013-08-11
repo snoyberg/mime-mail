@@ -35,6 +35,7 @@ test-suite tests
                  , mime-mail
                  , blaze-builder
                  , bytestring
+                 , text
     ghc-options:     -Wall
 
 source-repository head

@@ -383,7 +383,7 @@ buildQPs =
                     rest
                         | S.null y = qps
                         | otherwise = QPPlain y : qps
-                 in helper (S.length x) (copyByteString x) rest
+                 in helper (S.length x) (copyByteString x) (S.null y) rest
             QPEscape bs ->
                 let toTake = (75 - currLine) `div` 3
                     (x, y) = S.splitAt toTake bs
@@ -392,7 +392,7 @@ buildQPs =
                         | otherwise = QPEscape y : qps
                  in if toTake == 0
                         then copyByteString "\r\n" `mappend` go 0 (qp:qps)
-                        else helper (S.length x * 3) (escape x) rest
+                        else helper (S.length x * 3) (escape x) (S.null y) rest
       where
         escape =
             S.foldl' add mempty
@@ -403,11 +403,11 @@ buildQPs =
                 escaped = fromWord8 61 `mappend` hex (w `shiftR` 4)
                                        `mappend` hex (w .&. 15)
 
-        helper added builder rest =
+        helper added builder noMore rest =
             builder' `mappend` go newLine rest
            where
              (newLine, builder')
-                | added + currLine >= 75 =
+                | not noMore || (added + currLine) >= 75 =
                     (0, builder `mappend` copyByteString "=\r\n")
                 | otherwise = (added + currLine, builder)
 
@@ -416,7 +416,7 @@ buildQPs =
                 if currLine <= 73
                     then enc
                     else copyByteString "\r\n=" `mappend` enc
-            | otherwise = helper 1 raw qps
+            | otherwise = helper 1 raw (currLine < 76) qps
 
 -- | The first parameter denotes whether the input should be treated as text.
 -- If treated as text, then CRs will be stripped and LFs output as CRLFs. If

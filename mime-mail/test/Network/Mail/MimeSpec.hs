@@ -7,6 +7,7 @@ import Network.Mail.Mime
 import qualified Data.ByteString.Lazy.Char8 as L8
 import Blaze.ByteString.Builder (toLazyByteString)
 import Control.Monad (forM_)
+import Data.Text.Lazy.Encoding (encodeUtf8)
 
 spec :: Spec
 spec = describe "Network.Mail.Mime" $ do
@@ -37,6 +38,23 @@ spec = describe "Network.Mail.Mime" $ do
             let enc = "If you believe that truth=3Dbeauty, then surely mathematics is the most bea=\r\nutiful branch of philosophy."
                 dec = "If you believe that truth=beauty, then surely mathematics is the most beautiful branch of philosophy."
              in toLazyByteString (quotedPrintable True dec) `shouldBe` enc
+
+        it "issue #17- as text" $
+            let enc = "</a>=E3=81=AB=E3=81=A4=E3=81=84=E3=81=A6=E3=81=AE=E3=83=86=E3=82=B9=E3=83=\r\n=88"
+                dec = encodeUtf8 "</a>についてのテスト"
+             in toLazyByteString (quotedPrintable True dec) `shouldBe` enc
+
+        it "issue #17- as binary" $
+            let enc = "</a>=E3=81=AB=E3=81=A4=E3=81=84=E3=81=A6=E3=81=AE=E3=83=86=E3=82=B9=E3=83=\r\n=88"
+                dec = encodeUtf8 "</a>についてのテスト"
+             in toLazyByteString (quotedPrintable False dec) `shouldBe` enc
+
+        it "concrete example: over 76 characters" $
+            let orig = "\240\238\191aa\149aa\226a\235\255a=aa\SI\159a\187a\147aa\ACKa\184aaaaaa\191a\237aaaa\EM a"
+                gen = toLazyByteString $ quotedPrintable True orig
+             in if all (\l -> L8.length l <= 76) $ lines' gen
+                    then True
+                    else error $ show $ lines' gen
 
 lines' :: L8.ByteString -> [L8.ByteString]
 lines' =

@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
 module Network.Mail.Mime.SES
@@ -15,7 +16,11 @@ import System.Locale (defaultTimeLocale)
 import Data.Time (getCurrentTime)
 import qualified Data.ByteString.Char8 as S8
 import Crypto.HMAC
+#if MIN_VERSION_cryptohash(0, 10, 0)
+import Crypto.Hash.CryptoAPI (SHA256)
+#else
 import Crypto.Hash.SHA256 (SHA256)
+#endif
 import Data.ByteString.Base64 (encode)
 import qualified Data.Serialize as S
 import Control.Monad.Trans.Resource (MonadResource)

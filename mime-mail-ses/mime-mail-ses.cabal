@@ -1,5 +1,5 @@
 Name:                mime-mail-ses
-Version:             0.2.1.2
+Version:             0.2.1.3
 Synopsis:            Send mime-mail messages via Amazon SES
 Homepage:            http://github.com/snoyberg/mime-mail
 License:             MIT
@@ -26,4 +26,5 @@ Library
                      , transformers       >= 0.2
                      , http-types         >= 0.6.8
                      , monad-control      >= 0.3
+                     , cryptohash-cryptoapi
   ghc-options: -Wall

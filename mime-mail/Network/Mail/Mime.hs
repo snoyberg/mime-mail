@@ -219,6 +219,9 @@ showAddressHeader (k, as) =
     , fromByteString "\n"
     ]
 
+-- |
+--
+-- Since 0.4.3
 showAddress :: Address -> Builder
 showAddress a = mconcat
     [ maybe mempty ((`mappend` fromByteString " ") . encodedWord) (addressName a)

@@ -277,7 +277,7 @@ sendmailCustom :: FilePath        -- ^ sendmail executable path
                   -> L.ByteString -- ^ mail message as lazy bytestring
                   -> IO ()
 sendmailCustom sm opts lbs = do
-    (Just hin, _, _, phandle) <- createProcess $ 
+    (Just hin, _, _, phandle) <- createProcess $
                                  (proc sm opts) { std_in = CreatePipe }
     L.hPut hin lbs
     hClose hin

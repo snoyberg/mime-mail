@@ -18,7 +18,13 @@ module Network.Mail.Mime
     , renderSendMailCustom
       -- * High-level 'Mail' creation
     , simpleMail
+    , simpleMail'
       -- * Utilities
+    , addPart
+    , addAttachment
+    , addAttachments
+    , htmlPart
+    , plainPart
     , randomString
     , quotedPrintable
     ) where
@@ -26,7 +32,6 @@ module Network.Mail.Mime
 import qualified Data.ByteString.Lazy as L
 import Blaze.ByteString.Builder.Char.Utf8
 import Blaze.ByteString.Builder
-import Blaze.ByteString.Builder.Internal.Write (fromWriteList)
 import Data.Monoid
 import System.Random
 import Control.Arrow
@@ -35,7 +40,7 @@ import System.IO
 import System.Exit
 import System.FilePath (takeFileName)
 import qualified Data.ByteString.Base64 as Base64
-import Control.Monad ((<=<), forM)
+import Control.Monad ((<=<), foldM)
 import Data.List (intersperse)
 import qualified Data.Text.Lazy as LT
 import qualified Data.Text.Lazy.Encoding as LT
@@ -272,7 +277,7 @@ sendmailCustom :: FilePath        -- ^ sendmail executable path
                   -> L.ByteString -- ^ mail message as lazy bytestring
                   -> IO ()
 sendmailCustom sm opts lbs = do
-    (Just hin, _, _, phandle) <- createProcess $ 
+    (Just hin, _, _, phandle) <- createProcess $
                                  (proc sm opts) { std_in = CreatePipe }
     L.hPut hin lbs
     hClose hin
@@ -302,25 +307,49 @@ simpleMail :: Address -- ^ to
            -> LT.Text -- ^ HTML body
            -> [(Text, FilePath)] -- ^ content type and path of attachments
            -> IO Mail
-simpleMail to from subject plainBody htmlBody attachments = do
-    as <- forM attachments $ \(ct, fn) -> do
-        content <- L.readFile fn
-        return (ct, fn, content)
-    return Mail {
-          mailFrom = from
-        , mailTo   = [to]
-        , mailCc   = []
-        , mailBcc  = []
-        , mailHeaders = [ ("Subject", subject) ]
-        , mailParts =
-            [ Part "text/plain; charset=utf-8" QuotedPrintableText Nothing []
-            $ LT.encodeUtf8 plainBody
-            , Part "text/html; charset=utf-8" QuotedPrintableText Nothing []
-            $ LT.encodeUtf8 htmlBody
-            ] :
-            (map (\(ct, fn, content) ->
-                    [Part ct Base64 (Just $ T.pack (takeFileName fn)) [] content]) as)
-        }
+simpleMail to from subject plainBody htmlBody attachments =
+      addAttachments attachments
+    . addPart [plainPart plainBody, htmlPart htmlBody]
+    $ mailFromToSubject from to subject
+
+-- | A simple interface for generating an email with only plain-text body.
+simpleMail' :: Address -> Address -> Text -> LT.Text -> Mail
+simpleMail' to from subject body = addPart [plainPart body]
+                                 $ mailFromToSubject from to subject
+
+mailFromToSubject :: Address -> Address -> Text -> Mail
+mailFromToSubject to from subject =
+    (emptyMail from) { mailTo = [to]
+                     , mailHeaders = [("Subject", subject)]
+                     }
+
+-- | Add an 'Alternative' to the 'Mail's parts.
+--
+-- To e.g. add a plain text body use
+-- > addPart [plainPart body] (emptyMail from)
+addPart :: Alternatives -> Mail -> Mail
+addPart alt mail = mail { mailParts = alt : mailParts mail }
+
+-- | Construct a UTF-8-encoded plain-text 'Part'.
+plainPart :: LT.Text -> Part
+plainPart body = Part cType QuotedPrintableText Nothing [] $ LT.encodeUtf8 body
+  where cType = "text/plain; charset=utf-8"
+
+-- | Construct a UTF-8-encoded html 'Part'.
+htmlPart :: LT.Text -> Part
+htmlPart body = Part cType QuotedPrintableText Nothing [] $ LT.encodeUtf8 body
+  where cType = "text/html; charset=utf-8"
+
+-- | Add an attachment from a file and construct a 'Part'.
+addAttachment :: Text -> FilePath -> Mail -> IO Mail
+addAttachment ct fn mail = do
+    content <- L.readFile fn
+    let part = Part ct Base64 (Just $ T.pack (takeFileName fn)) [] content
+    return $ addPart [part] mail
+
+addAttachments :: [(Text, FilePath)] -> Mail -> IO Mail
+addAttachments xs mail = foldM fun mail xs
+  where fun m (c, f) = addAttachment c f m
 
 data QP = QPPlain S.ByteString
         | QPNewline

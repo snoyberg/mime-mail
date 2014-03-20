@@ -27,4 +27,5 @@ Library
                      , text
                      , conduit
                      , cryptohash         >= 0.7.3
+                     , byteable
   ghc-options: -Wall

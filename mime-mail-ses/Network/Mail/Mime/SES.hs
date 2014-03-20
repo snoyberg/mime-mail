@@ -8,8 +8,9 @@ module Network.Mail.Mime.SES
 
 import           Control.Exception           (Exception, throwIO)
 import           Control.Monad.IO.Class      (MonadIO, liftIO)
-import qualified Crypto.Hash.SHA256          as SHA256
-import           Crypto.MAC.HMAC             (hmac)
+import           Crypto.Hash                 (Digest, SHA256, hmac,
+                                              hmacGetDigest)
+import           Data.Byteable               (toBytes)
 import           Data.ByteString             (ByteString)
 import           Data.ByteString.Base64      (encode)
 import qualified Data.ByteString.Char8       as S8
@@ -122,4 +123,5 @@ data SESException = SESException
 instance Exception SESException
 
 makeSig :: ByteString -> ByteString -> ByteString
-makeSig payload key = encode $ hmac SHA256.hash 64 key payload
+makeSig payload key =
+    encode $ toBytes (hmacGetDigest $ hmac key payload :: Digest SHA256)

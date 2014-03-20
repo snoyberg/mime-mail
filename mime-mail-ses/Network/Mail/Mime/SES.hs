@@ -8,14 +8,13 @@ module Network.Mail.Mime.SES
 
 import           Control.Exception           (Exception, throwIO)
 import           Control.Monad.IO.Class      (MonadIO, liftIO)
-import           Crypto.Hash.CryptoAPI       (SHA256)
-import           Crypto.HMAC
+import qualified Crypto.Hash.SHA256          as SHA256
+import           Crypto.MAC.HMAC             (hmac)
 import           Data.ByteString             (ByteString)
 import           Data.ByteString.Base64      (encode)
 import qualified Data.ByteString.Char8       as S8
 import qualified Data.ByteString.Lazy        as L
 import           Data.Conduit                (Sink, await, ($$), (=$))
-import qualified Data.Serialize              as S
 import           Data.Text                   (Text)
 import qualified Data.Text                   as T
 import           Data.Time                   (getCurrentTime)
@@ -123,11 +122,4 @@ data SESException = SESException
 instance Exception SESException
 
 makeSig :: ByteString -> ByteString -> ByteString
-makeSig payload key =
-      encode
-    $ S.encode
-    $ hmac' (MacKey key) payload
-      `asTypeOf` x
-  where
-    x :: SHA256
-    x = undefined
+makeSig payload key = encode $ hmac SHA256.hash 64 key payload

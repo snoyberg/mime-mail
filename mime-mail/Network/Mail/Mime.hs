@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE CPP, OverloadedStrings #-}
 module Network.Mail.Mime
     ( -- * Datatypes
       Boundary (..)
@@ -263,7 +263,14 @@ renderMail' m = do
 -- | Send a fully-formed email message via the default sendmail
 -- executable with default options.
 sendmail :: L.ByteString -> IO ()
-sendmail = sendmailCustom "/usr/sbin/sendmail" ["-t"]
+sendmail = sendmailCustom sendmailPath ["-t"]
+
+sendmailPath :: String
+#ifdef MIME_MAIL_SENDMAIL_PATH
+sendmailPath = MIME_MAIL_SENDMAIL_PATH
+#else
+sendmailPath = "/usr/sbin/sendmail"
+#endif
 
 -- | Render an email message and send via the default sendmail
 -- executable with default options.

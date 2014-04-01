@@ -42,6 +42,7 @@ import System.Exit
 import System.FilePath (takeFileName)
 import qualified Data.ByteString.Base64 as Base64
 import Control.Monad ((<=<), foldM)
+import Control.Exception
 import Data.List (intersperse)
 import qualified Data.Text.Lazy as LT
 import qualified Data.Text.Lazy.Encoding as LT
@@ -292,7 +293,7 @@ sendmailCustom sm opts lbs = do
     exitCode <- waitForProcess phandle
     case exitCode of
         ExitSuccess -> return ()
-        _ -> error $ "sendmail exited with error code " ++ show exitCode
+        _ -> throwIO $ ErrorCall ("sendmail exited with error code " ++ show exitCode)
 
 -- | Render an email message and send via the specified sendmail
 -- executable with specified options.

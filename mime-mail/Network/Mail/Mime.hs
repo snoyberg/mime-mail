@@ -8,6 +8,7 @@ module Network.Mail.Mime
     , Alternatives
     , Part (..)
     , Encoding (..)
+    , Headers
       -- * Render a message
     , renderMail
     , renderMail'
@@ -81,7 +82,7 @@ data Mail = Mail
     , mailCc   :: [Address]
     , mailBcc  :: [Address]
     -- | Other headers, excluding from, to, cc and bcc.
-    , mailHeaders :: [(S.ByteString, Text)]
+    , mailHeaders :: Headers
     -- | A list of different sets of alternatives. As a concrete example:
     --
     -- > mailParts = [ [textVersion, htmlVersion], [attachment1], [attachment1]]

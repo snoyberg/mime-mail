@@ -42,7 +42,7 @@ import System.Exit
 import System.FilePath (takeFileName)
 import qualified Data.ByteString.Base64 as Base64
 import Control.Monad ((<=<), foldM)
-import Control.Exception
+import Control.Exception (throwIO, ErrorCall (ErrorCall))
 import Data.List (intersperse)
 import qualified Data.Text.Lazy as LT
 import qualified Data.Text.Lazy.Encoding as LT

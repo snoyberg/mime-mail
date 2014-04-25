@@ -330,7 +330,10 @@ simpleMail' :: Address -- ^ to
 simpleMail' to from subject body = addPart [plainPart body]
                                  $ mailFromToSubject from to subject
 
-mailFromToSubject :: Address -> Address -> Text -> Mail
+mailFromToSubject :: Address -- ^ from
+                  -> Address -- ^ to
+                  -> Text -- ^ subject
+                  -> Mail
 mailFromToSubject from to subject =
     (emptyMail from) { mailTo = [to]
                      , mailHeaders = [("Subject", subject)]

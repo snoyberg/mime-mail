@@ -322,11 +322,18 @@ simpleMail to from subject plainBody htmlBody attachments =
     $ mailFromToSubject from to subject
 
 -- | A simple interface for generating an email with only plain-text body.
-simpleMail' :: Address -> Address -> Text -> LT.Text -> Mail
+simpleMail' :: Address -- ^ to
+            -> Address -- ^ from
+            -> Text -- ^ subject
+            -> LT.Text -- ^ body
+            -> Mail
 simpleMail' to from subject body = addPart [plainPart body]
                                  $ mailFromToSubject from to subject
 
-mailFromToSubject :: Address -> Address -> Text -> Mail
+mailFromToSubject :: Address -- ^ from
+                  -> Address -- ^ to
+                  -> Text -- ^ subject
+                  -> Mail
 mailFromToSubject from to subject =
     (emptyMail from) { mailTo = [to]
                      , mailHeaders = [("Subject", subject)]

@@ -4,6 +4,9 @@ module Network.Mail.Mime.SES
     ( sendMailSES
     , renderSendMailSES
     , SES (..)
+    , usEast1
+    , usWest2
+    , euWest1
     ) where
 
 import           Control.Exception           (Exception, throwIO)
@@ -37,6 +40,7 @@ data SES = SES
     , sesTo        :: [ByteString]
     , sesAccessKey :: ByteString
     , sesSecretKey :: ByteString
+    , sesRegion    :: Text
     }
 
 renderSendMailSES :: MonadIO m => Manager -> SES -> Mail -> m ()
@@ -47,7 +51,8 @@ sendMailSES manager ses msg = liftIO $ do
     now <- getCurrentTime
     let date = S8.pack $ format now
         sig = makeSig date $ sesSecretKey ses
-    req' <- parseUrl "https://email.us-east-1.amazonaws.com"
+        region = T.unpack $ sesRegion ses
+    req' <- parseUrl $ concat ["https://email.", region , ".amazonaws.com"]
     let auth = S8.concat
             [ "AWS3-HTTPS AWSAccessKeyId="
             , sesAccessKey ses
@@ -125,3 +130,12 @@ instance Exception SESException
 makeSig :: ByteString -> ByteString -> ByteString
 makeSig payload key =
     encode $ toBytes (hmacGetDigest $ hmac key payload :: Digest SHA256)
+
+usEast1 :: Text
+usEast1 = "us-east-1"
+
+usWest2 :: Text
+usWest2 = "us-west-2"
+
+euWest1 :: Text
+euWest1 = "eu-west-1"

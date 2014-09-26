@@ -126,8 +126,6 @@ type Alternatives = [Part]
 data Part = Part
     { partType :: Text -- ^ content type
     , partEncoding :: Encoding
-    -- | The filename for this part, if it is to be sent with an attachemnt
-    -- disposition.
     , partFilename :: Maybe Text
     , partHeaders :: Headers
     , partContent :: L.ByteString

@@ -151,8 +151,8 @@ partToPair (Part contentType encoding disposition headers content) =
       $ (case disposition of
             Nothing -> id
             Just (dt, mfn) ->
-              let renderedDisposition = showDispositionType dt <> maybe "" (\fn -> "; filename=" <> fn) mfn
-              in (:) ("Content-Disposition", renderedDisposition))
+                let renderedDisposition = showDispositionType dt <> maybe "" (\fn -> "; filename=" <> fn) mfn
+                in (:) ("Content-Disposition", renderedDisposition))
       $ headers
     builder =
         case encoding of

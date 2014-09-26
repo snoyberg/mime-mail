@@ -126,7 +126,7 @@ type Alternatives = [Part]
 data Part = Part
     { partType :: Text -- ^ content type
     , partEncoding :: Encoding
-    , partFilename :: Maybe Text
+    , partDisposition :: Maybe (DispositionType, Maybe Text)
     , partHeaders :: Headers
     , partContent :: L.ByteString
     }
@@ -149,9 +149,9 @@ partToPair (Part contentType encoding disposition headers content) =
                 (:) ("Content-Transfer-Encoding", "quoted-printable"))
       $ (case disposition of
             Nothing -> id
-            Just fn ->
-                (:) ("Content-Disposition", "attachment; filename="
-                                            `T.append` fn))
+            Just (dt, mfn) ->
+              let renderedDisposition = showDispositionType dt <> maybe "" (\fn -> "; filename=" <> fn) mfn
+              in (:) ("Content-Disposition", renderedDisposition))
       $ headers
     builder =
         case encoding of
@@ -159,6 +159,11 @@ partToPair (Part contentType encoding disposition headers content) =
             Base64 -> base64 content
             QuotedPrintableText -> quotedPrintable True content
             QuotedPrintableBinary -> quotedPrintable False content
+
+    showDispositionType dt =
+        case dt of
+            Inline -> "inline"
+            Attachment -> "attachment"
 
 showPairs :: RandomGen g
           => Text -- ^ multipart type, eg mixed, alternative
@@ -363,7 +368,7 @@ htmlPart body = Part cType QuotedPrintableText Nothing [] $ LT.encodeUtf8 body
 addAttachment :: Text -> FilePath -> Mail -> IO Mail
 addAttachment ct fn mail = do
     content <- L.readFile fn
-    let part = Part ct Base64 (Just $ T.pack (takeFileName fn)) [] content
+    let part = Part ct Base64 (Just (Attachment, Just $ T.pack (takeFileName fn))) [] content
     return $ addPart [part] mail
 
 addAttachments :: [(Text, FilePath)] -> Mail -> IO Mail

@@ -7,6 +7,7 @@ module Network.Mail.Mime
     , Address (..)
     , Alternatives
     , Part (..)
+    , DispositionType(..)
     , Encoding (..)
     , Headers
       -- * Render a message

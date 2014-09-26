@@ -113,6 +113,11 @@ data Address = Address
 -- | How to encode a single part. You should use 'Base64' for binary data.
 data Encoding = None | Base64 | QuotedPrintableText | QuotedPrintableBinary
 
+-- | An 'Inline' disposition type means that the part will be automatically
+-- displayed with the message. An 'Attachment' disposition type means that the part
+-- must be explicitly opened by the user.
+data DispositionType = Inline | Attachment
+
 -- | Multiple alternative representations of the same data. For example, you
 -- could provide a plain-text and HTML version of a message.
 type Alternatives = [Part]

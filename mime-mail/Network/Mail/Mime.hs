@@ -72,6 +72,7 @@ randomString len =
 
 -- | MIME boundary between parts of a message.
 newtype Boundary = Boundary { unBoundary :: Text }
+  deriving Show
 instance Random Boundary where
     randomR = const random
     random = first (Boundary . T.pack) . randomString 10
@@ -92,6 +93,7 @@ data Mail = Mail
     -- version last.
     , mailParts :: [Alternatives]
     }
+  deriving Show
 
 -- | A mail message with the provided 'from' address and no other
 -- fields filled in.
@@ -109,9 +111,11 @@ data Address = Address
     { addressName  :: Maybe Text
     , addressEmail :: Text
     }
+  deriving Show
 
 -- | How to encode a single part. You should use 'Base64' for binary data.
 data Encoding = None | Base64 | QuotedPrintableText | QuotedPrintableBinary
+  deriving Show
 
 -- | Multiple alternative representations of the same data. For example, you
 -- could provide a plain-text and HTML version of a message.
@@ -127,6 +131,7 @@ data Part = Part
     , partHeaders :: Headers
     , partContent :: L.ByteString
     }
+  deriving Show
 
 type Headers = [(S.ByteString, Text)]
 type Pair = (Headers, Builder)

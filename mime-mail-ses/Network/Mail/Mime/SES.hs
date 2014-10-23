@@ -42,6 +42,7 @@ data SES = SES
     , sesSecretKey :: ByteString
     , sesRegion    :: Text
     }
+  deriving Show
 
 renderSendMailSES :: MonadIO m => Manager -> SES -> Mail -> m ()
 renderSendMailSES m ses mail = liftIO (renderMail' mail) >>= sendMailSES m ses

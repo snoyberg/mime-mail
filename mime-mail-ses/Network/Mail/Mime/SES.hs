@@ -7,6 +7,7 @@ module Network.Mail.Mime.SES
     , usEast1
     , usWest2
     , euWest1
+    , SESException (..)
     ) where
 
 import           Control.Exception           (Exception, throwIO)
@@ -119,6 +120,9 @@ checkForError status = do
             , seRequestId = reqid
             }
 
+-- |
+--
+-- Exposed since: 0.3.2
 data SESException = SESException
     { seStatus    :: !Status
     , seCode      :: !Text

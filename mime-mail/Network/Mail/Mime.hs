@@ -444,7 +444,7 @@ buildQPs =
                         | S.null y = qps
                         | otherwise = QPEscape y : qps
                  in if toTake == 0
-                        then copyByteString "\r\n" `mappend` go 0 (qp:qps)
+                        then copyByteString "=\r\n" `mappend` go 0 (qp:qps)
                         else helper (S.length x * 3) (escape x) (S.null y) rest
       where
         escape =

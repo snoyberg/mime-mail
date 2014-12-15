@@ -1,6 +1,7 @@
 Name:                mime-mail-ses
-Version:             0.3.2
+Version:             0.3.2.1
 Synopsis:            Send mime-mail messages via Amazon SES
+description:         Hackage documentation generation is not reliable. For up to date documentation, please see: <http://www.stackage.org/package/mime-mail-ses>.
 Homepage:            http://github.com/snoyberg/mime-mail
 License:             MIT
 License-file:        LICENSE
@@ -10,6 +11,7 @@ Category:            Web
 Build-type:          Simple
 Cabal-version:       >=1.6
 extra-source-files:  ChangeLog.md
+                     README.md
 
 Library
   Exposed-modules:     Network.Mail.Mime.SES

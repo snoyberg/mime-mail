@@ -1,9 +1,9 @@
 Name:                mime-mail
-Version:             0.4.6.1
+Version:             0.4.6.2
 Synopsis:            Compose MIME email messages.
-Description:         This package provides some high-level datatypes for declaring MIME email messages, functions for automatically composing these into bytestrings, and the ability to send bytestrings via the sendmail executable. You can also use any other library you wish to send via different methods, eg directly to SMTP.
+description:         Hackage documentation generation is not reliable. For up to date documentation, please see: <http://www.stackage.org/package/mime-mail>.
 Homepage:            http://github.com/snoyberg/mime-mail
-License:             BSD3
+License:             MIT
 License-file:        LICENSE
 Author:              Michael Snoyman <michael@snoyman.com>
 Maintainer:          Michael Snoyman <michael@snoyman.com>

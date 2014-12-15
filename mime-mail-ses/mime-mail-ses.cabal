@@ -2,7 +2,7 @@ Name:                mime-mail-ses
 Version:             0.3.2
 Synopsis:            Send mime-mail messages via Amazon SES
 Homepage:            http://github.com/snoyberg/mime-mail
-License:             MIT
+License:             BSD3
 License-file:        LICENSE
 Author:              Michael Snoyman
 Maintainer:          michael@snoyman.com

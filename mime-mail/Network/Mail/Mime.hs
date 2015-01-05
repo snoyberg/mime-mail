@@ -127,11 +127,16 @@ data Part = Part
     , partEncoding :: Encoding
     -- | The filename for this part, if it is to be sent with an attachemnt
     -- disposition.
-    , partFilename :: Maybe Text
+    , partDisposition :: Disposition
     , partHeaders :: Headers
     , partContent :: L.ByteString
     }
   deriving Show
+
+data Disposition = AttachmentDisposition Text 
+                 | InlineDisposition
+                 | DefaultDisposition
+                 deriving (Show, Eq)
 
 type Headers = [(S.ByteString, Text)]
 type Pair = (Headers, Builder)
@@ -150,10 +155,12 @@ partToPair (Part contentType encoding disposition headers content) =
             QuotedPrintableBinary ->
                 (:) ("Content-Transfer-Encoding", "quoted-printable"))
       $ (case disposition of
-            Nothing -> id
-            Just fn ->
-                (:) ("Content-Disposition", "attachment; filename="
-                                            `T.append` fn))
+            AttachmentDisposition fn ->
+                (:) ("Content-Disposition", "attachment; filename=" `T.append` fn)
+            InlineDisposition  -> 
+                (:) ("Content-Disposition", "inline")
+            DefaultDisposition -> id
+        )
       $ headers
     builder =
         case encoding of
@@ -353,19 +360,19 @@ addPart alt mail = mail { mailParts = alt : mailParts mail }
 
 -- | Construct a UTF-8-encoded plain-text 'Part'.
 plainPart :: LT.Text -> Part
-plainPart body = Part cType QuotedPrintableText Nothing [] $ LT.encodeUtf8 body
+plainPart body = Part cType QuotedPrintableText DefaultDisposition [] $ LT.encodeUtf8 body
   where cType = "text/plain; charset=utf-8"
 
 -- | Construct a UTF-8-encoded html 'Part'.
 htmlPart :: LT.Text -> Part
-htmlPart body = Part cType QuotedPrintableText Nothing [] $ LT.encodeUtf8 body
+htmlPart body = Part cType QuotedPrintableText DefaultDisposition [] $ LT.encodeUtf8 body
   where cType = "text/html; charset=utf-8"
 
 -- | Add an attachment from a file and construct a 'Part'.
 addAttachment :: Text -> FilePath -> Mail -> IO Mail
 addAttachment ct fn mail = do
     content <- L.readFile fn
-    let part = Part ct Base64 (Just $ T.pack (takeFileName fn)) [] content
+    let part = Part ct Base64 (AttachmentDisposition $ T.pack (takeFileName fn)) [] content
     return $ addPart [part] mail
 
 addAttachments :: [(Text, FilePath)] -> Mail -> IO Mail

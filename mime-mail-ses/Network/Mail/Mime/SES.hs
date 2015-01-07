@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE CPP #-}
 module Network.Mail.Mime.SES
     ( sendMailSES
     , renderSendMailSES
@@ -33,8 +34,13 @@ import           Network.HTTP.Client         (Manager, checkStatus, parseUrl,
 import           Network.HTTP.Client.Conduit (bodyReaderSource)
 import           Network.HTTP.Types          (Status)
 import           Network.Mail.Mime           (Mail, renderMail')
-import           System.Locale               (defaultTimeLocale)
 import           Text.XML.Stream.Parse       (def, parseBytes)
+
+#if MIN_VERSION_time(1,5,0)
+import           Data.Time                   (defaultTimeLocale)
+#else
+import           System.Locale               (defaultTimeLocale)
+#endif
 
 data SES = SES
     { sesFrom      :: ByteString

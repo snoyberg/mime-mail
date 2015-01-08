@@ -129,8 +129,11 @@ data Part = Part
     -- disposition.
     , partDisposition :: Disposition
     , partHeaders :: Headers
-    , partContent :: L.ByteString
+    , partContent :: PartContent
     }
+  deriving Show
+
+data PartContent = PartContent L.ByteString | NestedParts [Part] 
   deriving Show
 
 data Disposition = AttachmentDisposition Text 
@@ -142,7 +145,7 @@ type Headers = [(S.ByteString, Text)]
 type Pair = (Headers, Builder)
 
 partToPair :: Part -> Pair
-partToPair (Part contentType encoding disposition headers content) =
+partToPair (Part contentType encoding disposition headers (PartContent content)) =
     (headers', builder)
   where
     headers' =
@@ -168,6 +171,8 @@ partToPair (Part contentType encoding disposition headers content) =
             Base64 -> base64 content
             QuotedPrintableText -> quotedPrintable True content
             QuotedPrintableBinary -> quotedPrintable False content
+partToPair (Part contentType encoding disposition headers (NestedParts parts)) =
+    undefined -- TODO
 
 showPairs :: RandomGen g
           => Text -- ^ multipart type, eg mixed, alternative
@@ -352,14 +357,16 @@ simpleMail2 :: Address -- ^ to
            -> Text -- ^ subject
            -> LT.Text -- ^ plain body
            -> LT.Text -- ^ HTML body
-           -> [(Text, FilePath)] -- ^ content type and path of attachments
            -> [(Text, FilePath)] -- ^ content type and path of inline images
+           -> [(Text, FilePath)] -- ^ content type and path of attachments
            -> IO Mail
 
-simpleMail2 to from subject plainBody htmlBody attachments imgs =
-    (addAttachments attachments >=> inlineImages attachments)
-    . addPart [plainPart plainBody, htmlPart htmlBody]
-    $ mailFromToSubject from to subject
+simpleMail2 to from subject plainBody htmlBody imgs attachments = do
+    imgParts <- mapM (uncurry inlineImage) imgs
+    addAttachments attachments 
+      . addPart [ plainPart plainBody
+                , relatedPart (htmlPart htmlBody:imgParts)]
+      $ mailFromToSubject from to subject
 
 mailFromToSubject :: Address -- ^ from
                   -> Address -- ^ to
@@ -377,21 +384,31 @@ mailFromToSubject from to subject =
 addPart :: Alternatives -> Mail -> Mail
 addPart alt mail = mail { mailParts = alt : mailParts mail }
 
+-- | Add a 'Related' Part
+   
+relatedPart :: [Part] -> Part
+relatedPart parts = 
+   -- TODO fix NestedParts
+   Part "multipart/related" None DefaultDisposition [] (NestedParts [])
+
 -- | Construct a UTF-8-encoded plain-text 'Part'.
 plainPart :: LT.Text -> Part
-plainPart body = Part cType QuotedPrintableText DefaultDisposition [] $ LT.encodeUtf8 body
+plainPart body = Part cType QuotedPrintableText DefaultDisposition [] 
+    $ PartContent (LT.encodeUtf8 body)
   where cType = "text/plain; charset=utf-8"
 
 -- | Construct a UTF-8-encoded html 'Part'.
 htmlPart :: LT.Text -> Part
-htmlPart body = Part cType QuotedPrintableText DefaultDisposition [] $ LT.encodeUtf8 body
+htmlPart body = Part cType QuotedPrintableText DefaultDisposition [] 
+    $ PartContent (LT.encodeUtf8 body)
   where cType = "text/html; charset=utf-8"
 
 -- | Add an attachment from a file and construct a 'Part'.
 addAttachment :: Text -> FilePath -> Mail -> IO Mail
 addAttachment ct fn mail = do
     content <- L.readFile fn
-    let part = Part ct Base64 (AttachmentDisposition $ T.pack (takeFileName fn)) [] content
+    let part = Part ct Base64 (AttachmentDisposition $ T.pack (takeFileName fn)) [] 
+                  (PartContent content)
     return $ addPart [part] mail
 
 addAttachments :: [(Text, FilePath)] -> Mail -> IO Mail
@@ -400,16 +417,11 @@ addAttachments xs mail = foldM fun mail xs
 
 -- | Add an inline image from a file and construct a 'Part'.
 -- TODO make a cid identifier based on filename
-inlineImage :: Text -> FilePath -> Mail -> IO Mail
-inlineImage ct fn mail = do
+inlineImage :: Text -> FilePath -> IO Part
+inlineImage ct fn = do
     content <- L.readFile fn
-    let part = Part ct Base64 (InlineDisposition $ T.pack (takeFileName fn)) [] content
-    return $ addPart [part] mail
-
-inlineImages :: [(Text, FilePath)] -> Mail -> IO Mail
-inlineImages xs mail = foldM fun mail xs
-  where fun m (c, f) = inlineImage  c f m
-
+    return $ Part ct Base64 (InlineDisposition $ T.pack (takeFileName fn)) [] 
+              (PartContent content)
 
 data QP = QPPlain S.ByteString
         | QPNewline

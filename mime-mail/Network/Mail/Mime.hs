@@ -142,11 +142,13 @@ data Disposition = AttachmentDisposition Text
                  deriving (Show, Eq)
 
 type Headers = [(S.ByteString, Text)]
-type Pair = (Headers, Builder)
+
+data Pair = Pair (Headers, Builder) 
+          | CompoundPair (Headers, [Pair])
 
 partToPair :: Part -> Pair
 partToPair (Part contentType encoding disposition headers (PartContent content)) =
-    (headers', builder)
+    Pair (headers', builder)
   where
     headers' =
         ((:) ("Content-Type", contentType))
@@ -172,8 +174,16 @@ partToPair (Part contentType encoding disposition headers (PartContent content))
             QuotedPrintableText -> quotedPrintable True content
             QuotedPrintableBinary -> quotedPrintable False content
 partToPair (Part contentType encoding disposition headers (NestedParts parts)) =
-    undefined -- TODO
+    CompoundPair (headers', pairs)
+  where 
+    headers' = ("Content-Type", contentType):headers
+    pairs = map partToPair parts
 
+
+
+
+
+-- This function merges sibling pairs into a multipart pair
 showPairs :: RandomGen g
           => Text -- ^ multipart type, eg mixed, alternative
           -> [Pair]
@@ -182,7 +192,7 @@ showPairs :: RandomGen g
 showPairs _ [] _ = error "renderParts called with null parts"
 showPairs _ [pair] gen = (pair, gen)
 showPairs mtype parts gen =
-    ((headers, builder), gen')
+    (Pair (headers, builder), gen')
   where
     (Boundary b, gen') = random gen
     headers =
@@ -200,21 +210,57 @@ showPairs mtype parts gen =
         , showBoundEnd $ Boundary b
         ]
 
+-- This function flattens any compound pairs into a multipart
+-- related, but leaves other pairs in tact
+-- NOTE that this is not recursive, and assumes only one level of nesting.
+flattenCompoundPair :: RandomGen g => Pair -> g -> (Pair, g)
+flattenCompoundPair pair@(Pair _) gen = (pair, gen)
+flattenCompoundPair (CompoundPair (hs, pairs)) gen = 
+       (Pair (headers, builder), gen')
+  where
+    (Boundary b, gen') = random gen
+    headers =
+        [ ("Content-Type", T.concat
+            [ "multipart/related" , "; boundary=\"" , b , "\"" ])
+        ]
+    builder = mconcat
+        [ mconcat $ intersperse (fromByteString "\n")
+                  $ map (showBoundPart $ Boundary b) pairs
+        , showBoundEnd $ Boundary b
+        ]
+
+ 
+
+
 -- | Render a 'Mail' with a given 'RandomGen' for producing boundaries.
 renderMail :: RandomGen g => g -> Mail -> (L.ByteString, g)
 renderMail g0 (Mail from to cc bcc headers parts) =
     (toLazyByteString builder, g'')
   where
     addressHeaders = map showAddressHeader [("From", [from]), ("To", to), ("Cc", cc), ("Bcc", bcc)]
+    -- parts is [Alternative], or [[Part]]
+    pairs :: [[Pair]]
     pairs = map (map partToPair) parts
-    (pairs', g') = helper g0 $ map (showPairs "alternative") pairs
+
+    (pairs1, g1) = helper2 g0 $ map (map flattenCompoundPair) pairs 
+    (pairs', g') = helper g1 $ map (showPairs "alternative") pairs1
+
     helper :: g -> [g -> (x, g)] -> ([x], g)
     helper g [] = ([], g)
     helper g (x:xs) =
         let (b, g_) = x g
             (bs, g__) = helper g_ xs
          in (b : bs, g__)
-    ((finalHeaders, finalBuilder), g'') = showPairs "mixed" pairs' g'
+
+    -- new 2nd order helper
+    helper2 :: g -> [[g -> (x, g)]] -> ([[x]], g)
+    helper2 g [] = ([], g)
+    helper2 g (x:xs) =
+        let (b, g_) = helper g x  -- original helper
+            (bs, g__) = helper2 g_ xs
+         in (b : bs, g__)
+
+    (Pair (finalHeaders, finalBuilder), g'') = showPairs "mixed" pairs' g'
     builder = mconcat
         [ mconcat addressHeaders
         , mconcat $ map showHeader headers
@@ -254,8 +300,8 @@ showAddress a = mconcat
     , fromByteString ">"
     ]
 
-showBoundPart :: Boundary -> (Headers, Builder) -> Builder
-showBoundPart (Boundary b) (headers, content) = mconcat
+showBoundPart :: Boundary -> Pair -> Builder
+showBoundPart (Boundary b) (Pair (headers, content)) = mconcat
     [ fromByteString "--"
     , fromText b
     , fromByteString "\n"
@@ -385,11 +431,9 @@ addPart :: Alternatives -> Mail -> Mail
 addPart alt mail = mail { mailParts = alt : mailParts mail }
 
 -- | Add a 'Related' Part
-   
 relatedPart :: [Part] -> Part
 relatedPart parts = 
-   -- TODO fix NestedParts
-   Part "multipart/related" None DefaultDisposition [] (NestedParts [])
+   Part "multipart/related" None DefaultDisposition [] (NestedParts parts)
 
 -- | Construct a UTF-8-encoded plain-text 'Part'.
 plainPart :: LT.Text -> Part

@@ -41,7 +41,7 @@ import System.IO
 import System.Exit
 import System.FilePath (takeFileName)
 import qualified Data.ByteString.Base64 as Base64
-import Control.Monad ((<=<), foldM)
+import Control.Monad ((<=<), (>=>), foldM)
 import Control.Exception (throwIO, ErrorCall (ErrorCall))
 import Data.List (intersperse)
 import qualified Data.Text.Lazy as LT
@@ -134,7 +134,7 @@ data Part = Part
   deriving Show
 
 data Disposition = AttachmentDisposition Text 
-                 | InlineDisposition
+                 | InlineDisposition Text
                  | DefaultDisposition
                  deriving (Show, Eq)
 
@@ -157,7 +157,7 @@ partToPair (Part contentType encoding disposition headers content) =
       $ (case disposition of
             AttachmentDisposition fn ->
                 (:) ("Content-Disposition", "attachment; filename=" `T.append` fn)
-            InlineDisposition  -> 
+            InlineDisposition  _ -> 
                 (:) ("Content-Disposition", "inline")
             DefaultDisposition -> id
         )
@@ -342,6 +342,25 @@ simpleMail' :: Address -- ^ to
 simpleMail' to from subject body = addPart [plainPart body]
                                  $ mailFromToSubject from to subject
 
+
+-- | Interface for generating an email with HTML and plain-text
+-- alternatives, some file attachments, and inline images.
+-- Note that we use lazy IO for reading in the attachment and inlined images.
+
+simpleMail2 :: Address -- ^ to
+           -> Address -- ^ from
+           -> Text -- ^ subject
+           -> LT.Text -- ^ plain body
+           -> LT.Text -- ^ HTML body
+           -> [(Text, FilePath)] -- ^ content type and path of attachments
+           -> [(Text, FilePath)] -- ^ content type and path of inline images
+           -> IO Mail
+
+simpleMail2 to from subject plainBody htmlBody attachments imgs =
+    (addAttachments attachments >=> inlineImages attachments)
+    . addPart [plainPart plainBody, htmlPart htmlBody]
+    $ mailFromToSubject from to subject
+
 mailFromToSubject :: Address -- ^ from
                   -> Address -- ^ to
                   -> Text -- ^ subject
@@ -378,6 +397,19 @@ addAttachment ct fn mail = do
 addAttachments :: [(Text, FilePath)] -> Mail -> IO Mail
 addAttachments xs mail = foldM fun mail xs
   where fun m (c, f) = addAttachment c f m
+
+-- | Add an inline image from a file and construct a 'Part'.
+-- TODO make a cid identifier based on filename
+inlineImage :: Text -> FilePath -> Mail -> IO Mail
+inlineImage ct fn mail = do
+    content <- L.readFile fn
+    let part = Part ct Base64 (InlineDisposition $ T.pack (takeFileName fn)) [] content
+    return $ addPart [part] mail
+
+inlineImages :: [(Text, FilePath)] -> Mail -> IO Mail
+inlineImages xs mail = foldM fun mail xs
+  where fun m (c, f) = inlineImage  c f m
+
 
 data QP = QPPlain S.ByteString
         | QPNewline

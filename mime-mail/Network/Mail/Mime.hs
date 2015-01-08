@@ -180,9 +180,6 @@ partToPair (Part contentType encoding disposition headers (NestedParts parts)) =
     pairs = map partToPair parts
 
 
-
-
-
 -- This function merges sibling pairs into a multipart pair
 showPairs :: RandomGen g
           => Text -- ^ multipart type, eg mixed, alternative
@@ -228,8 +225,6 @@ flattenCompoundPair (CompoundPair (hs, pairs)) gen =
                   $ map (showBoundPart $ Boundary b) pairs
         , showBoundEnd $ Boundary b
         ]
-
- 
 
 
 -- | Render a 'Mail' with a given 'RandomGen' for producing boundaries.

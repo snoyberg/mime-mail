@@ -133,6 +133,8 @@ data Part = Part
     }
   deriving Show
 
+-- NestedParts are for multipart-related: One HTML part and some inline images
+
 data PartContent = PartContent L.ByteString | NestedParts [Part] 
   deriving Show
 

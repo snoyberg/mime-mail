@@ -20,13 +20,13 @@ module Network.Mail.Mime
       -- * High-level 'Mail' creation
     , simpleMail
     , simpleMail'
-    , simpleMail''
+    , simpleMailInMemory
       -- * Utilities
     , addPart
     , addAttachment
     , addAttachments
-    , addAttachment'
-    , addAttachments'
+    , addAttachmentBS
+    , addAttachmentsBS
     , htmlPart
     , plainPart
     , randomString
@@ -340,15 +340,15 @@ simpleMail' to from subject body = addPart [plainPart body]
 
 -- | A simple interface for generating an email with HTML and plain-text
 -- alternatives and some 'ByteString' attachments.
-simpleMail'' :: Address -- ^ to
+simpleMailInMemory :: Address -- ^ to
            -> Address -- ^ from
            -> Text -- ^ subject
            -> LT.Text -- ^ plain body
            -> LT.Text -- ^ HTML body
            -> [(Text, Text, L.ByteString)] -- ^ content type, file name and contents of attachments
            -> Mail
-simpleMail'' to from subject plainBody htmlBody attachments =
-      addAttachments' attachments
+simpleMailInMemory to from subject plainBody htmlBody attachments =
+      addAttachmentsBS attachments
     . addPart [plainPart plainBody, htmlPart htmlBody]
     $ mailFromToSubject from to subject
 
@@ -390,14 +390,14 @@ addAttachments xs mail = foldM fun mail xs
   where fun m (c, f) = addAttachment c f m
 
 -- | Add an attachment from a 'ByteString' and construct a 'Part'.
-addAttachment' :: Text -> Text -> L.ByteString -> Mail -> Mail
-addAttachment' ct fn content mail =
+addAttachmentBS :: Text -> Text -> L.ByteString -> Mail -> Mail
+addAttachmentBS ct fn content mail =
     let part = Part ct Base64 (Just fn) [] content
     in addPart [part] mail
 
-addAttachments' :: [(Text, Text, L.ByteString)] -> Mail -> Mail
-addAttachments' xs mail = foldl fun mail xs
-  where fun m (ct, fn, content) = addAttachment' ct fn content m
+addAttachmentsBS :: [(Text, Text, L.ByteString)] -> Mail -> Mail
+addAttachmentsBS xs mail = foldl fun mail xs
+  where fun m (ct, fn, content) = addAttachmentBS ct fn content m
 
 data QP = QPPlain S.ByteString
         | QPNewline

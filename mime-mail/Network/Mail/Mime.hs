@@ -340,6 +340,8 @@ simpleMail' to from subject body = addPart [plainPart body]
 
 -- | A simple interface for generating an email with HTML and plain-text
 -- alternatives and some 'ByteString' attachments.
+--
+-- Since 0.4.7
 simpleMailInMemory :: Address -- ^ to
            -> Address -- ^ from
            -> Text -- ^ subject
@@ -390,11 +392,18 @@ addAttachments xs mail = foldM fun mail xs
   where fun m (c, f) = addAttachment c f m
 
 -- | Add an attachment from a 'ByteString' and construct a 'Part'.
-addAttachmentBS :: Text -> Text -> L.ByteString -> Mail -> Mail
+--
+-- Since 0.4.7
+addAttachmentBS :: Text -- ^ content type
+                -> Text -- ^ file name
+                -> L.ByteString -- ^ content
+                -> Mail -> Mail
 addAttachmentBS ct fn content mail =
     let part = Part ct Base64 (Just fn) [] content
     in addPart [part] mail
 
+-- |
+-- Since 0.4.7
 addAttachmentsBS :: [(Text, Text, L.ByteString)] -> Mail -> Mail
 addAttachmentsBS xs mail = foldl fun mail xs
   where fun m (ct, fn, content) = addAttachmentBS ct fn content m

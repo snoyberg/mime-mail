@@ -20,10 +20,13 @@ module Network.Mail.Mime
       -- * High-level 'Mail' creation
     , simpleMail
     , simpleMail'
+    , simpleMailInMemory
       -- * Utilities
     , addPart
     , addAttachment
     , addAttachments
+    , addAttachmentBS
+    , addAttachmentsBS
     , htmlPart
     , plainPart
     , randomString
@@ -335,6 +338,20 @@ simpleMail' :: Address -- ^ to
 simpleMail' to from subject body = addPart [plainPart body]
                                  $ mailFromToSubject from to subject
 
+-- | A simple interface for generating an email with HTML and plain-text
+-- alternatives and some 'ByteString' attachments.
+simpleMailInMemory :: Address -- ^ to
+           -> Address -- ^ from
+           -> Text -- ^ subject
+           -> LT.Text -- ^ plain body
+           -> LT.Text -- ^ HTML body
+           -> [(Text, Text, L.ByteString)] -- ^ content type, file name and contents of attachments
+           -> Mail
+simpleMailInMemory to from subject plainBody htmlBody attachments =
+      addAttachmentsBS attachments
+    . addPart [plainPart plainBody, htmlPart htmlBody]
+    $ mailFromToSubject from to subject
+
 mailFromToSubject :: Address -- ^ from
                   -> Address -- ^ to
                   -> Text -- ^ subject
@@ -371,6 +388,16 @@ addAttachment ct fn mail = do
 addAttachments :: [(Text, FilePath)] -> Mail -> IO Mail
 addAttachments xs mail = foldM fun mail xs
   where fun m (c, f) = addAttachment c f m
+
+-- | Add an attachment from a 'ByteString' and construct a 'Part'.
+addAttachmentBS :: Text -> Text -> L.ByteString -> Mail -> Mail
+addAttachmentBS ct fn content mail =
+    let part = Part ct Base64 (Just fn) [] content
+    in addPart [part] mail
+
+addAttachmentsBS :: [(Text, Text, L.ByteString)] -> Mail -> Mail
+addAttachmentsBS xs mail = foldl fun mail xs
+  where fun m (ct, fn, content) = addAttachmentBS ct fn content m
 
 data QP = QPPlain S.ByteString
         | QPNewline

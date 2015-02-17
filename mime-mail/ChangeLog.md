@@ -1,3 +1,7 @@
+## 0.4.8
+
+* Add some `Eq` instances [#38](https://github.com/snoyberg/mime-mail/pull/38)
+
 ## 0.4.7
 
 * `simpleMailInMemory`

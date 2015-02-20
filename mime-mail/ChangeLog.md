@@ -1,3 +1,7 @@
+## 0.4.8.1
+
+* Bump blaze-builder upper bound [#39](https://github.com/snoyberg/mime-mail/pull/39)
+
 ## 0.4.8
 
 * Add some `Eq` instances [#38](https://github.com/snoyberg/mime-mail/pull/38)

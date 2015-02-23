@@ -404,11 +404,11 @@ simpleMail2 :: Address -- ^ to
            -> [(Text, FilePath)] -- ^ content type and path of attachments
            -> IO Mail
 
-simpleMail2 to from subject plainBody htmlBody imgs attachments = do
-    imgParts <- mapM (uncurry inlineImage) imgs
-    addAttachments attachments 
+simpleMail2 to from subject plainBody htmlBody images attachments = do
+    (addAttachments attachments 
+      <=< addImages images)
       . addPart [ plainPart plainBody
-                , relatedPart (htmlPart htmlBody:imgParts)]
+                , relatedPart [htmlPart htmlBody]]
       $ mailFromToSubject from to subject
 
 mailFromToSubject :: Address -- ^ from
@@ -458,11 +458,15 @@ addAttachments xs mail = foldM fun mail xs
 
 -- | Add an inline image from a file and construct a 'Part'.
 -- TODO make a cid identifier based on filename
-inlineImage :: Text -> FilePath -> IO Part
-inlineImage ct fn = do
+addImage :: Text -> FilePath -> Mail -> IO Mail 
+addImage ct fn mail = do
     content <- L.readFile fn
-    return $ Part ct Base64 (InlineDisposition $ T.pack (takeFileName fn)) [] 
-              (PartContent content)
+    let part = Part ct Base64 (InlineDisposition $ T.pack (takeFileName fn)) [] (PartContent content)
+    return $ addPart [part] mail
+
+addImages :: [(Text, FilePath)] -> Mail -> IO Mail
+addImages xs mail = foldM fun mail xs
+  where fun m (c, f) = addImage c f m 
 
 data QP = QPPlain S.ByteString
         | QPNewline

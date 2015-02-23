@@ -396,6 +396,9 @@ simpleMail' to from subject body = addPart [plainPart body]
 -- | Interface for generating an email with HTML and plain-text
 -- alternatives, some file attachments, and inline images.
 -- Note that we use lazy IO for reading in the attachment and inlined images.
+-- Inline images can be referred to from the HTML content using
+-- the @src="cid:{{CONTENT-ID}}"@ syntax, where CONTENT-ID is
+-- the filename of the image.
 
 simpleMailWithImages :: Address -- ^ to
            -> Address -- ^ from

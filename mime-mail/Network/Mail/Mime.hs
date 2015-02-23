@@ -139,7 +139,7 @@ data PartContent = PartContent L.ByteString | NestedParts [Part]
   deriving Show
 
 data Disposition = AttachmentDisposition Text 
-                 | InlineDisposition Text
+                 | InlineDisposition Text 
                  | DefaultDisposition
                  deriving (Show, Eq)
 
@@ -164,8 +164,9 @@ partToPair (Part contentType encoding disposition headers (PartContent content))
       $ (case disposition of
             AttachmentDisposition fn ->
                 (:) ("Content-Disposition", "attachment; filename=" `T.append` fn)
-            InlineDisposition  _ -> 
-                (:) ("Content-Disposition", "inline")
+            InlineDisposition  fn -> 
+                -- Use filename for Content ID for now
+                (:) ("Content-Disposition", "inline") . (:) ("Content-ID", fn)
             DefaultDisposition -> id
         )
       $ headers
@@ -457,7 +458,6 @@ addAttachments xs mail = foldM fun mail xs
   where fun m (c, f) = addAttachment c f m
 
 -- | Add an inline image from a file and construct a 'Part'.
--- TODO make a cid identifier based on filename
 addImage :: Text -> FilePath -> Mail -> IO Mail 
 addImage ct fn mail = do
     content <- L.readFile fn

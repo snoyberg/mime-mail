@@ -7,6 +7,7 @@ module Network.Mail.Mime
     , Address (..)
     , Alternatives
     , Part (..)
+    , PartContent (..)
     , Encoding (..)
     , Headers
       -- * Render a message
@@ -20,6 +21,7 @@ module Network.Mail.Mime
       -- * High-level 'Mail' creation
     , simpleMail
     , simpleMail'
+    , simpleMailWithImages
       -- * Utilities
     , addPart
     , addAttachment
@@ -133,8 +135,7 @@ data Part = Part
     }
   deriving Show
 
--- NestedParts are for multipart-related: One HTML part and some inline images
-
+-- | NestedParts are for multipart-related: One HTML part and some inline images
 data PartContent = PartContent L.ByteString | NestedParts [Part] 
   deriving Show
 
@@ -396,7 +397,7 @@ simpleMail' to from subject body = addPart [plainPart body]
 -- alternatives, some file attachments, and inline images.
 -- Note that we use lazy IO for reading in the attachment and inlined images.
 
-simpleMail2 :: Address -- ^ to
+simpleMailWithImages :: Address -- ^ to
            -> Address -- ^ from
            -> Text -- ^ subject
            -> LT.Text -- ^ plain body
@@ -405,7 +406,7 @@ simpleMail2 :: Address -- ^ to
            -> [(Text, FilePath)] -- ^ content type and path of attachments
            -> IO Mail
 
-simpleMail2 to from subject plainBody htmlBody images attachments = do
+simpleMailWithImages to from subject plainBody htmlBody images attachments = do
     (addAttachments attachments 
       <=< addImages images)
       . addPart [ plainPart plainBody

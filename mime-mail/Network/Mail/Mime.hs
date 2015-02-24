@@ -238,8 +238,9 @@ renderMail g0 (Mail from to cc bcc headers parts) =
   where
     addressHeaders = map showAddressHeader [("From", [from]), ("To", to), ("Cc", cc), ("Bcc", bcc)]
     -- parts is [Alternative], or [[Part]]
+    -- reverse parts so attachments come at the end
     pairs :: [[Pair]]
-    pairs = map (map partToPair) parts
+    pairs = map (map partToPair) (reverse parts)
 
     (pairs1, g1) = helper2 g0 $ map (map flattenCompoundPair) pairs 
     (pairs', g') = helper g1 $ map (showPairs "alternative") pairs1
@@ -400,7 +401,7 @@ simpleMail' to from subject body = addPart [plainPart body]
 -- the @src="cid:{{CONTENT-ID}}"@ syntax, where CONTENT-ID is
 -- the filename of the image.
 
-simpleMailWithImages :: Address -- ^ to
+simpleMailWithImages :: [Address] -- ^ to
            -> Address -- ^ from
            -> Text -- ^ subject
            -> LT.Text -- ^ plain body
@@ -408,13 +409,12 @@ simpleMailWithImages :: Address -- ^ to
            -> [(Text, FilePath)] -- ^ content type and path of inline images
            -> [(Text, FilePath)] -- ^ content type and path of attachments
            -> IO Mail
-
 simpleMailWithImages to from subject plainBody htmlBody images attachments = do
-    (addAttachments attachments 
-      <=< addImages images)
+    inlineImageParts <- mkImageParts images
+    addAttachments attachments 
       . addPart [ plainPart plainBody
-                , relatedPart [htmlPart htmlBody]]
-      $ mailFromToSubject from to subject
+                , relatedPart ((htmlPart htmlBody):inlineImageParts) ]
+      $ (emptyMail from) { mailTo = to, mailHeaders = [("Subject", subject)] }
 
 mailFromToSubject :: Address -- ^ from
                   -> Address -- ^ to
@@ -462,15 +462,15 @@ addAttachments xs mail = foldM fun mail xs
   where fun m (c, f) = addAttachment c f m
 
 -- | Add an inline image from a file and construct a 'Part'.
-addImage :: Text -> FilePath -> Mail -> IO Mail 
-addImage ct fn mail = do
+addImage :: (Text, FilePath) -> IO Part
+addImage (ct,fn) = do
     content <- L.readFile fn
-    let part = Part ct Base64 (InlineDisposition $ T.pack (takeFileName fn)) [] (PartContent content)
-    return $ addPart [part] mail
+    return 
+      $ Part ct Base64 (InlineDisposition $ T.pack (takeFileName fn)) [] (PartContent content)
 
-addImages :: [(Text, FilePath)] -> Mail -> IO Mail
-addImages xs mail = foldM fun mail xs
-  where fun m (c, f) = addImage c f m 
+mkImageParts :: [(Text, FilePath)] -> IO [Part]
+mkImageParts xs = 
+    mapM addImage xs
 
 data QP = QPPlain S.ByteString
         | QPNewline

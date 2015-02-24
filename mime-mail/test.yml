@@ -1,0 +1,18 @@
+sender: 
+  name: Daniel Jones
+  email: dan@somemail.com
+recipients:
+  - name: Joe Smith 
+    email: joe@somemail.com
+  - name: Jane Doe
+    email: jane@gmail.com
+subject: hello
+plain: hello world
+html: |
+  <h1>Hello World</h1>
+  Embedded here <img src="cid:cat.jpg"/>
+  Yay
+images: 
+  - path: cat.jpg
+    mime_type: image/jpeg
+attachments: []

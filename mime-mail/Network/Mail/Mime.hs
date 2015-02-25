@@ -21,11 +21,14 @@ module Network.Mail.Mime
       -- * High-level 'Mail' creation
     , simpleMail
     , simpleMail'
+    , simpleMailInMemory
     , simpleMailWithImages
       -- * Utilities
     , addPart
     , addAttachment
     , addAttachments
+    , addAttachmentBS
+    , addAttachmentsBS
     , htmlPart
     , plainPart
     , randomString
@@ -74,7 +77,7 @@ randomString len =
 
 -- | MIME boundary between parts of a message.
 newtype Boundary = Boundary { unBoundary :: Text }
-  deriving Show
+  deriving (Eq, Show)
 instance Random Boundary where
     randomR = const random
     random = first (Boundary . T.pack) . randomString 10
@@ -113,11 +116,11 @@ data Address = Address
     { addressName  :: Maybe Text
     , addressEmail :: Text
     }
-  deriving Show
+  deriving (Eq, Show)
 
 -- | How to encode a single part. You should use 'Base64' for binary data.
 data Encoding = None | Base64 | QuotedPrintableText | QuotedPrintableBinary
-  deriving Show
+  deriving (Eq, Show)
 
 -- | Multiple alternative representations of the same data. For example, you
 -- could provide a plain-text and HTML version of a message.
@@ -133,11 +136,11 @@ data Part = Part
     , partHeaders :: Headers
     , partContent :: PartContent
     }
-  deriving Show
+  deriving (Eq, Show)
 
 -- | NestedParts are for multipart-related: One HTML part and some inline images
 data PartContent = PartContent L.ByteString | NestedParts [Part] 
-  deriving Show
+  deriving (Eq, Show)
 
 data Disposition = AttachmentDisposition Text 
                  | InlineDisposition Text 
@@ -393,15 +396,30 @@ simpleMail' :: Address -- ^ to
 simpleMail' to from subject body = addPart [plainPart body]
                                  $ mailFromToSubject from to subject
 
+-- | A simple interface for generating an email with HTML and plain-text
+-- alternatives and some 'ByteString' attachments.
+--
+-- Since 0.4.7
+simpleMailInMemory :: Address -- ^ to
+           -> Address -- ^ from
+           -> Text -- ^ subject
+           -> LT.Text -- ^ plain body
+           -> LT.Text -- ^ HTML body
+           -> [(Text, Text, L.ByteString)] -- ^ content type, file name and contents of attachments
+           -> Mail
+simpleMailInMemory to from subject plainBody htmlBody attachments =
+      addAttachmentsBS attachments
+    . addPart [plainPart plainBody, htmlPart htmlBody]
+    $ mailFromToSubject from to subject
 
--- | Interface for generating an email with HTML and plain-text
+-- | An interface for generating an email with HTML and plain-text
 -- alternatives, some file attachments, and inline images.
 -- Note that we use lazy IO for reading in the attachment and inlined images.
 -- Inline images can be referred to from the HTML content using
 -- the @src="cid:{{CONTENT-ID}}"@ syntax, where CONTENT-ID is
 -- the filename of the image.
 
-simpleMailWithImages :: [Address] -- ^ to
+simpleMailWithImages :: [Address] -- ^ to (multiple)
            -> Address -- ^ from
            -> Text -- ^ subject
            -> LT.Text -- ^ plain body
@@ -471,6 +489,23 @@ addImage (ct,fn) = do
 mkImageParts :: [(Text, FilePath)] -> IO [Part]
 mkImageParts xs = 
     mapM addImage xs
+
+-- | Add an attachment from a 'ByteString' and construct a 'Part'.
+--
+-- Since 0.4.7
+addAttachmentBS :: Text -- ^ content type
+                -> Text -- ^ file name
+                -> L.ByteString -- ^ content
+                -> Mail -> Mail
+addAttachmentBS ct fn content mail =
+    let part = Part ct Base64 (AttachmentDisposition fn) [] (PartContent content)
+    in addPart [part] mail
+
+-- |
+-- Since 0.4.7
+addAttachmentsBS :: [(Text, Text, L.ByteString)] -> Mail -> Mail
+addAttachmentsBS xs mail = foldl fun mail xs
+  where fun m (ct, fn, content) = addAttachmentBS ct fn content m
 
 data QP = QPPlain S.ByteString
         | QPNewline

@@ -1,5 +1,5 @@
 Name:                mime-mail
-Version:             0.4.6.2
+Version:             0.4.8.1
 Synopsis:            Compose MIME email messages.
 description:         Hackage documentation generation is not reliable. For up to date documentation, please see: <http://www.stackage.org/package/mime-mail>.
 Homepage:            http://github.com/snoyberg/mime-mail
@@ -22,7 +22,7 @@ Library
                  , base64-bytestring   >= 0.1
                  , process             >= 1.0
                  , random              >= 1.0
-                 , blaze-builder       >= 0.2.1      && < 0.4
+                 , blaze-builder       >= 0.2.1      && < 0.5
                  , bytestring          >= 0.9.1
                  , text                >= 0.7
                  , filepath            >= 1.2

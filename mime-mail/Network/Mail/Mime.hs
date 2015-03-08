@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, OverloadedStrings #-}
+{-# LANGUAGE CPP, OverloadedStrings, RecordWildCards #-}
 module Network.Mail.Mime
     ( -- * Datatypes
       Boundary (..)
@@ -33,6 +33,8 @@ module Network.Mail.Mime
     , plainPart
     , randomString
     , quotedPrintable
+    , InlineImage(..)
+    , ImageContent(..)
     ) where
 
 import qualified Data.ByteString.Lazy as L
@@ -168,9 +170,8 @@ partToPair (Part contentType encoding disposition headers (PartContent content))
       $ (case disposition of
             AttachmentDisposition fn ->
                 (:) ("Content-Disposition", "attachment; filename=" `T.append` fn)
-            InlineDisposition  fn -> 
-                -- Use filename for Content ID for now
-                (:) ("Content-Disposition", "inline") . (:) ("Content-ID", fn)
+            InlineDisposition cid -> 
+                (:) ("Content-Disposition", "inline") . (:) ("Content-ID", cid)
             DefaultDisposition -> id
         )
       $ headers
@@ -419,12 +420,21 @@ simpleMailInMemory to from subject plainBody htmlBody attachments =
 -- the @src="cid:{{CONTENT-ID}}"@ syntax, where CONTENT-ID is
 -- the filename of the image.
 
+data InlineImage = InlineImage {
+      imageContentType :: Text
+    , imageContent :: ImageContent
+    , imageCID :: Text
+    } deriving Show
+
+data ImageContent = ImageFilePath FilePath | ImageByteString L.ByteString
+  deriving Show
+
 simpleMailWithImages :: [Address] -- ^ to (multiple)
            -> Address -- ^ from
            -> Text -- ^ subject
            -> LT.Text -- ^ plain body
            -> LT.Text -- ^ HTML body
-           -> [(Text, FilePath)] -- ^ content type and path of inline images
+           -> [InlineImage] 
            -> [(Text, FilePath)] -- ^ content type and path of attachments
            -> IO Mail
 simpleMailWithImages to from subject plainBody htmlBody images attachments = do
@@ -480,13 +490,15 @@ addAttachments xs mail = foldM fun mail xs
   where fun m (c, f) = addAttachment c f m
 
 -- | Add an inline image from a file and construct a 'Part'.
-addImage :: (Text, FilePath) -> IO Part
-addImage (ct,fn) = do
-    content <- L.readFile fn
+addImage :: InlineImage -> IO Part
+addImage InlineImage{..} = do
+    content <- case imageContent of 
+                ImageFilePath fn -> L.readFile fn
+                ImageByteString bs -> return bs
     return 
-      $ Part ct Base64 (InlineDisposition $ T.pack (takeFileName fn)) [] (PartContent content)
+      $ Part imageContentType Base64 (InlineDisposition imageCID) [] (PartContent content)
 
-mkImageParts :: [(Text, FilePath)] -> IO [Part]
+mkImageParts :: [InlineImage] -> IO [Part]
 mkImageParts xs = 
     mapM addImage xs
 

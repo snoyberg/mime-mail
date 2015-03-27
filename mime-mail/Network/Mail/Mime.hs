@@ -451,6 +451,7 @@ toQP isText =
     toQPC 10 | isText = QPCLF
     toQPC 9 = QPCTab
     toQPC 0x20 = QPCSpace
+    toQPC 46 = QPCEscape
     toQPC 61 = QPCEscape
     toQPC w
         | 33 <= w && w <= 126 = QPCPlain

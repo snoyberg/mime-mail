@@ -35,7 +35,7 @@ spec = describe "Network.Mail.Mime" $ do
              in all (\l -> L8.length l <= 76) $ lines' gen
 
         it "example from Wikipedia" $
-            let enc = "If you believe that truth=3Dbeauty, then surely mathematics is the most bea=\r\nutiful branch of philosophy."
+            let enc = "If you believe that truth=3Dbeauty, then surely mathematics is the most bea=\r\nutiful branch of philosophy=2E"
                 dec = "If you believe that truth=beauty, then surely mathematics is the most beautiful branch of philosophy."
              in toLazyByteString (quotedPrintable True dec) `shouldBe` enc
 

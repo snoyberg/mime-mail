@@ -299,6 +299,8 @@ sendmailCustom sm opts lbs = void $ sendmailCustomAux False sm opts lbs
 
 -- | Like 'sendmailCustom', but also returns sendmail's output to stderr and
 -- stdout as strict ByteStrings.
+--
+-- Since 0.4.9
 sendmailCustomCaptureOutput :: FilePath
                                -> [String]
                                -> L.ByteString

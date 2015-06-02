@@ -1,3 +1,7 @@
+## 0.4.9
+
+* Add `sendmailCustomCaptureOutput` [#42](https://github.com/snoyberg/mime-mail/pull/42)
+
 ## 0.4.8.1
 
 * Bump blaze-builder upper bound [#39](https://github.com/snoyberg/mime-mail/pull/39)

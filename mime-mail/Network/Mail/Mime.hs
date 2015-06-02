@@ -15,6 +15,7 @@ module Network.Mail.Mime
       -- * Sending messages
     , sendmail
     , sendmailCustom
+    , sendmailCustomCaptureOutput
     , renderSendMail
     , renderSendMailCustom
       -- * High-level 'Mail' creation
@@ -36,6 +37,7 @@ module Network.Mail.Mime
 import qualified Data.ByteString.Lazy as L
 import Blaze.ByteString.Builder.Char.Utf8
 import Blaze.ByteString.Builder
+import Control.Concurrent (forkIO, putMVar, takeMVar, newEmptyMVar)
 import Data.Monoid
 import System.Random
 import Control.Arrow
@@ -44,7 +46,7 @@ import System.IO
 import System.Exit
 import System.FilePath (takeFileName)
 import qualified Data.ByteString.Base64 as Base64
-import Control.Monad ((<=<), foldM)
+import Control.Monad ((<=<), foldM, void)
 import Control.Exception (throwIO, ErrorCall (ErrorCall))
 import Data.List (intersperse)
 import qualified Data.Text.Lazy as LT
@@ -293,14 +295,47 @@ sendmailCustom :: FilePath        -- ^ sendmail executable path
                   -> [String]     -- ^ sendmail command-line options
                   -> L.ByteString -- ^ mail message as lazy bytestring
                   -> IO ()
-sendmailCustom sm opts lbs = do
-    (Just hin, _, _, phandle) <- createProcess $
-                                 (proc sm opts) { std_in = CreatePipe }
+sendmailCustom sm opts lbs = void $ sendmailCustomAux False sm opts lbs
+
+-- | Like 'sendmailCustom', but also returns sendmail's output to stderr and
+-- stdout as strict ByteStrings.
+sendmailCustomCaptureOutput :: FilePath
+                               -> [String]
+                               -> L.ByteString
+                               -> IO (S.ByteString, S.ByteString)
+sendmailCustomCaptureOutput sm opts lbs = sendmailCustomAux True sm opts lbs
+
+sendmailCustomAux :: Bool 
+                     -> FilePath
+                     -> [String]
+                     -> L.ByteString
+                     -> IO (S.ByteString, S.ByteString)
+sendmailCustomAux captureOut sm opts lbs = do
+    let baseOpts = (proc sm opts) { std_in = CreatePipe }
+        pOpts = if captureOut
+                    then baseOpts { std_out = CreatePipe
+                                  , std_err = CreatePipe
+                                  }
+                    else baseOpts
+    (Just hin, mHOut, mHErr, phandle) <- createProcess pOpts
     L.hPut hin lbs
     hClose hin
+    errMVar <- newEmptyMVar
+    outMVar <- newEmptyMVar
+    case (mHOut, mHErr) of
+        (Nothing, Nothing) -> return ()
+        (Just hOut, Just hErr) -> do
+            void . forkIO $ S.hGetContents hOut >>= putMVar outMVar
+            void . forkIO $ S.hGetContents hErr >>= putMVar errMVar
+        _ -> error "error in sendmailCustomAux: missing a handle"
     exitCode <- waitForProcess phandle
     case exitCode of
-        ExitSuccess -> return ()
+        ExitSuccess -> if captureOut
+            then do
+                errOutput <- takeMVar errMVar
+                outOutput <- takeMVar outMVar
+                return (outOutput, errOutput)
+            else return (S.empty, S.empty)
         _ -> throwIO $ ErrorCall ("sendmail exited with error code " ++ show exitCode)
 
 -- | Render an email message and send via the specified sendmail

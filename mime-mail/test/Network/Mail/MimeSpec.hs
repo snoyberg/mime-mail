@@ -23,7 +23,7 @@ spec = describe "Network.Mail.Mime" $ do
                     $ foldr
                         (\a b -> b ++ replicate 74 'x' ++ [a])
                         ""
-                        (" ")
+                        [' ']
             forM_ (lines' lbs) $ (\l -> L8.length l `shouldSatisfy` (<= 76))
         prop "always under 76 characters, text" $ \s ->
             let orig = L8.pack s

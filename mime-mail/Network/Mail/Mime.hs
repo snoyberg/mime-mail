@@ -405,7 +405,7 @@ mailFromToSubject from to subject =
 -- To e.g. add a plain text body use
 -- > addPart [plainPart body] (emptyMail from)
 addPart :: Alternatives -> Mail -> Mail
-addPart alt mail = mail { mailParts = alt : mailParts mail }
+addPart alt mail = mail { mailParts = mailParts mail ++ [alt] }
 
 -- | Construct a UTF-8-encoded plain-text 'Part'.
 plainPart :: LT.Text -> Part

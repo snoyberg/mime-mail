@@ -1,3 +1,7 @@
+## 0.4.10
+
+* addParts: append mail parts to a Mail [#43](https://github.com/snoyberg/mime-mail/pull/43)
+
 ## 0.4.9
 
 * Add `sendmailCustomCaptureOutput` [#42](https://github.com/snoyberg/mime-mail/pull/42)

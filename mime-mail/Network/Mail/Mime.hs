@@ -28,6 +28,7 @@ module Network.Mail.Mime
     , addAttachments
     , addAttachmentBS
     , addAttachmentsBS
+    , renderAddress
     , htmlPart
     , plainPart
     , randomString
@@ -216,6 +217,13 @@ renderMail g0 (Mail from to cc bcc headers parts) =
         , fromByteString "\n"
         , finalBuilder
         ]
+
+-- | Format an E-Mail address according to the name-addr form (see: RFC5322
+-- § 3.4 "Address specification", i.e: [display-name] '<'addr-spec'>')
+-- This can be handy for adding custom headers that require such format.
+renderAddress :: Address -> Text
+renderAddress address =
+    TE.decodeUtf8 $ toByteString $ showAddress address
 
 showHeader :: (S.ByteString, Text) -> Builder
 showHeader (k, v) = mconcat

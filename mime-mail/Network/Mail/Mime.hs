@@ -251,7 +251,7 @@ showAddressHeader (k, as) =
 -- Since 0.4.3
 showAddress :: Address -> Builder
 showAddress a = mconcat
-    [ maybe mempty ((`mappend` fromByteString " ") . encodedWord) (addressName a)
+    [ maybe mempty ((fromByteString " " <>) . encodedWord) (addressName a)
     , fromByteString "<"
     , fromText (addressEmail a)
     , fromByteString ">"

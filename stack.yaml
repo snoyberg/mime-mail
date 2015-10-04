@@ -1,0 +1,4 @@
+resolver: lts-3.7
+packages:
+- mime-mail/
+- mime-mail-ses/

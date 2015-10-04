@@ -1,3 +1,7 @@
+## 0.4.11
+
+* Export renderAddress as a utility (e.g. Reply-to) [#44](https://github.com/snoyberg/mime-mail/pull/44)
+
 ## 0.4.10
 
 * addParts: append mail parts to a Mail [#43](https://github.com/snoyberg/mime-mail/pull/43)

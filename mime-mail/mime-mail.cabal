@@ -30,6 +30,7 @@ Library
 test-suite tests
     type: exitcode-stdio-1.0
     main-is: Spec.hs
+    other-modules: Network.Mail.MimeSpec
     hs-source-dirs: test
 
     build-depends: base

@@ -56,6 +56,7 @@ import Data.ByteString.Char8 ()
 import Data.Bits ((.&.), shiftR)
 import Data.Char (isAscii)
 import Data.Word (Word8)
+import Data.String (IsString(..))
 import qualified Data.ByteString as S
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -118,6 +119,9 @@ data Address = Address
     , addressEmail :: Text
     }
   deriving (Eq, Show)
+
+instance IsString Address where
+    fromString str = Address Nothing (fromString str)
 
 -- | How to encode a single part. You should use 'Base64' for binary data.
 data Encoding = None | Base64 | QuotedPrintableText | QuotedPrintableBinary

@@ -27,7 +27,13 @@ import           Data.Time                   (getCurrentTime)
 import           Data.Time.Format            (formatTime)
 import           Data.Typeable               (Typeable)
 import           Data.XML.Types              (Content (ContentText), Event (EventBeginElement, EventContent))
-import           Network.HTTP.Client         (Manager, checkStatus, parseUrl,
+import           Network.HTTP.Client         (Manager,
+#if MIN_VERSION_http_client(0, 5, 0)
+                                              parseRequest,
+#else
+                                              checkStatus,
+                                              parseUrl,
+#endif
                                               requestHeaders, responseBody,
                                               responseStatus, urlEncodedBody,
                                               withResponse)
@@ -60,7 +66,11 @@ sendMailSES manager ses msg = liftIO $ do
     let date = S8.pack $ format now
         sig = makeSig date $ sesSecretKey ses
         region = T.unpack $ sesRegion ses
+#if MIN_VERSION_http_client(0, 5, 0)
+    req' <- parseRequest $ concat ["https://email.", region , ".amazonaws.com"]
+#else
     req' <- parseUrl $ concat ["https://email.", region , ".amazonaws.com"]
+#endif
     let auth = S8.concat
             [ "AWS3-HTTPS AWSAccessKeyId="
             , sesAccessKey ses
@@ -72,7 +82,9 @@ sendMailSES manager ses msg = liftIO $ do
                 [ ("Date", date)
                 , ("X-Amzn-Authorization", auth)
                 ]
+#if !MIN_VERSION_http_client(0, 5, 0)
             , checkStatus = \_ _ _ -> Nothing
+#endif
             }
     withResponse req manager $ \res ->
            bodyReaderSource (responseBody res)

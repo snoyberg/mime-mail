@@ -25,8 +25,10 @@ module Network.Mail.Mime
       -- * Utilities
     , addPart
     , addAttachment
+    , addAttachmentCid
     , addAttachments
     , addAttachmentBS
+    , addAttachmentBSCid
     , addAttachmentsBS
     , renderAddress
     , htmlPart
@@ -430,9 +432,19 @@ htmlPart body = Part cType QuotedPrintableText Nothing [] $ LT.encodeUtf8 body
 -- | Add an attachment from a file and construct a 'Part'.
 addAttachment :: Text -> FilePath -> Mail -> IO Mail
 addAttachment ct fn mail = do
-    content <- L.readFile fn
-    let part = Part ct Base64 (Just $ T.pack (takeFileName fn)) [] content
+    part <- getAttachmentPart ct fn mail
     return $ addPart [part] mail
+
+-- | Add an attachment from a file and construct a 'Part'
+-- with the specified content id in the Content-ID header.
+addAttachmentCid :: Text -> FilePath -> Text -> Mail -> IO Mail
+addAttachmentCid ct fn cid mail =
+  getAttachmentPart ct fn mail >>= (return.addToMail.addHeader) 
+  where 
+    addToMail part = addPart [part] mail
+    addHeader part = part { partHeaders = header:ph }
+      where ph = partHeaders part
+    header = ("Content-ID", T.concat ["<", cid, ">"])
 
 addAttachments :: [(Text, FilePath)] -> Mail -> IO Mail
 addAttachments xs mail = foldM fun mail xs
@@ -446,14 +458,38 @@ addAttachmentBS :: Text -- ^ content type
                 -> L.ByteString -- ^ content
                 -> Mail -> Mail
 addAttachmentBS ct fn content mail =
-    let part = Part ct Base64 (Just fn) [] content
+    let part = getAttachmentPartBS ct fn content
     in addPart [part] mail
+
+addAttachmentBSCid :: Text -- ^ content type
+                -> Text -- ^ file name
+                -> L.ByteString -- ^ content
+                -> Text
+                -> Mail -> Mail
+addAttachmentBSCid ct fn content cid mail =
+    let part = addHeader $ getAttachmentPartBS ct fn content
+    in addPart [part] mail
+    where
+      addHeader part = part { partHeaders = header:ph }
+        where ph = partHeaders part
+      header = ("Content-ID", T.concat ["<", cid, ">"])
 
 -- |
 -- Since 0.4.7
 addAttachmentsBS :: [(Text, Text, L.ByteString)] -> Mail -> Mail
 addAttachmentsBS xs mail = foldl fun mail xs
   where fun m (ct, fn, content) = addAttachmentBS ct fn content m
+
+getAttachmentPartBS :: Text
+                    -> Text
+                    -> L.ByteString
+                    -> Part
+getAttachmentPartBS ct fn content = Part ct Base64 (Just fn) [] content
+
+getAttachmentPart :: Text -> FilePath -> Mail -> IO Part
+getAttachmentPart ct fn mail = do
+    content <- L.readFile fn
+    return $ getAttachmentPartBS ct (T.pack (takeFileName fn)) content
 
 data QP = QPPlain S.ByteString
         | QPNewline

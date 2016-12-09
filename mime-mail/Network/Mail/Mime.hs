@@ -432,14 +432,14 @@ htmlPart body = Part cType QuotedPrintableText Nothing [] $ LT.encodeUtf8 body
 -- | Add an attachment from a file and construct a 'Part'.
 addAttachment :: Text -> FilePath -> Mail -> IO Mail
 addAttachment ct fn mail = do
-    part <- getAttachmentPart ct fn mail
+    part <- getAttachmentPart ct fn
     return $ addPart [part] mail
 
 -- | Add an attachment from a file and construct a 'Part'
 -- with the specified content id in the Content-ID header.
 addAttachmentCid :: Text -> FilePath -> Text -> Mail -> IO Mail
 addAttachmentCid ct fn cid mail =
-  getAttachmentPart ct fn mail >>= (return.addToMail.addHeader) 
+  getAttachmentPart ct fn >>= (return.addToMail.addHeader) 
   where 
     addToMail part = addPart [part] mail
     addHeader part = part { partHeaders = header:ph }
@@ -486,8 +486,8 @@ getAttachmentPartBS :: Text
                     -> Part
 getAttachmentPartBS ct fn content = Part ct Base64 (Just fn) [] content
 
-getAttachmentPart :: Text -> FilePath -> Mail -> IO Part
-getAttachmentPart ct fn mail = do
+getAttachmentPart :: Text -> FilePath -> IO Part
+getAttachmentPart ct fn = do
     content <- L.readFile fn
     return $ getAttachmentPartBS ct (T.pack (takeFileName fn)) content
 

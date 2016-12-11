@@ -437,7 +437,13 @@ addAttachment ct fn mail = do
 
 -- | Add an attachment from a file and construct a 'Part'
 -- with the specified content id in the Content-ID header.
-addAttachmentCid :: Text -> FilePath -> Text -> Mail -> IO Mail
+--
+-- @since 0.4.12
+addAttachmentCid :: Text -- ^ content type
+                 -> FilePath -- ^ file name
+                 -> Text -- ^ content ID
+                 -> Mail
+                 -> IO Mail
 addAttachmentCid ct fn cid mail =
   getAttachmentPart ct fn >>= (return.addToMail.addHeader) 
   where 
@@ -461,10 +467,11 @@ addAttachmentBS ct fn content mail =
     let part = getAttachmentPartBS ct fn content
     in addPart [part] mail
 
+-- | @since 0.4.12
 addAttachmentBSCid :: Text -- ^ content type
                 -> Text -- ^ file name
                 -> L.ByteString -- ^ content
-                -> Text
+                -> Text -- ^ content ID
                 -> Mail -> Mail
 addAttachmentBSCid ct fn content cid mail =
     let part = addHeader $ getAttachmentPartBS ct fn content

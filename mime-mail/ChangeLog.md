@@ -1,3 +1,7 @@
+## 0.4.12
+
+* Add function to add attachments with content id [#48](https://github.com/snoyberg/mime-mail/pull/48)
+
 ## 0.4.11
 
 * Export renderAddress as a utility (e.g. Reply-to) [#44](https://github.com/snoyberg/mime-mail/pull/44)

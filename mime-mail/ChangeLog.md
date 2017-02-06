@@ -1,3 +1,7 @@
+## 0.4.13
+
+* Sanitize headers to protect against email injection.
+
 ## 0.4.12
 
 * Add function to add attachments with content id [#48](https://github.com/snoyberg/mime-mail/pull/48)

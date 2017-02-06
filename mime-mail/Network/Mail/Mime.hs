@@ -56,7 +56,7 @@ import qualified Data.Text.Lazy as LT
 import qualified Data.Text.Lazy.Encoding as LT
 import Data.ByteString.Char8 ()
 import Data.Bits ((.&.), shiftR)
-import Data.Char (isAscii)
+import Data.Char (isAscii, isControl)
 import Data.Word (Word8)
 import qualified Data.ByteString as S
 import Data.Text (Text)
@@ -229,11 +229,15 @@ renderAddress :: Address -> Text
 renderAddress address =
     TE.decodeUtf8 $ toByteString $ showAddress address
 
+-- Only accept characters between 33 and 126, excluding colons. [RFC2822](https://tools.ietf.org/html/rfc2822#section-2.2)
+sanitizeFieldName :: S.ByteString -> S.ByteString
+sanitizeFieldName = S.filter (\w -> w >= 33 && w <= 126 && w /= 58)
+
 showHeader :: (S.ByteString, Text) -> Builder
 showHeader (k, v) = mconcat
-    [ fromByteString k
+    [ fromByteString (sanitizeFieldName k)
     , fromByteString ": "
-    , encodeIfNeeded v
+    , encodeIfNeeded (sanitizeHeader v)
     , fromByteString "\n"
     ]
 
@@ -255,9 +259,13 @@ showAddress :: Address -> Builder
 showAddress a = mconcat
     [ maybe mempty ((fromByteString " " <>) . encodedWord) (addressName a)
     , fromByteString "<"
-    , fromText (addressEmail a)
+    , fromText (sanitizeHeader $ addressEmail a)
     , fromByteString ">"
     ]
+
+-- Filter out control characters to prevent CRLF injection.
+sanitizeHeader :: Text -> Text
+sanitizeHeader = T.filter (not . isControl)
 
 showBoundPart :: Boundary -> (Headers, Builder) -> Builder
 showBoundPart (Boundary b) (headers, content) = mconcat

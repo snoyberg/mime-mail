@@ -56,6 +56,11 @@ spec = describe "Network.Mail.Mime" $ do
                     then True
                     else error $ show $ lines' gen
 
+        it "issue #50" $
+            let addr = Address (Just "Name_ (is): @hi?") "user@domain.tld"
+                enc = "=?utf-8?Q?Name=5F_=28is=29=3A_=40hi=3F?= <user@domain.tld>"
+             in renderAddress addr `shouldBe` enc
+
 lines' :: L8.ByteString -> [L8.ByteString]
 lines' =
     map stripCR . L8.lines

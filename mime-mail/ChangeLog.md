@@ -1,3 +1,7 @@
+## 0.4.13.1
+
+* Fix [#50](https://github.com/snoyberg/mime-mail/issues/50): space between name and address [#51](https://github.com/snoyberg/mime-mail/pull/51)
+
 ## 0.4.13
 
 * Sanitize headers to protect against email injection.

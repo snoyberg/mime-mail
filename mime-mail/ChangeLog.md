@@ -1,3 +1,7 @@
+## 0.4.14
+
+* Add `IsString` instance for `Address`
+
 ## 0.4.13.1
 
 * Fix [#50](https://github.com/snoyberg/mime-mail/issues/50): space between name and address [#51](https://github.com/snoyberg/mime-mail/pull/51)

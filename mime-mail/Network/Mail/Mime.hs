@@ -123,7 +123,7 @@ data Address = Address
   deriving (Eq, Show)
 
 instance IsString Address where
-    fromString str = Address Nothing (fromString str)
+    fromString = Address Nothing . Data.String.fromString
 
 -- | How to encode a single part. You should use 'Base64' for binary data.
 data Encoding = None | Base64 | QuotedPrintableText | QuotedPrintableBinary

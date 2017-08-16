@@ -49,12 +49,12 @@ import           System.Locale               (defaultTimeLocale)
 #endif
 
 data SES = SES
-    { sesFrom         :: ByteString
-    , sesTo           :: [ByteString]
-    , sesAccessKey    :: ByteString
-    , sesSecretKey    :: ByteString
-    , sesSessionToken :: Maybe ByteString
-    , sesRegion       :: Text
+    { sesFrom         :: !ByteString
+    , sesTo           :: ![ByteString]
+    , sesAccessKey    :: !ByteString
+    , sesSecretKey    :: !ByteString
+    , sesSessionToken :: !(Maybe ByteString)
+    , sesRegion       :: !Text
     }
   deriving Show
 

@@ -49,11 +49,12 @@ import           System.Locale               (defaultTimeLocale)
 #endif
 
 data SES = SES
-    { sesFrom      :: ByteString
-    , sesTo        :: [ByteString]
-    , sesAccessKey :: ByteString
-    , sesSecretKey :: ByteString
-    , sesRegion    :: Text
+    { sesFrom         :: ByteString
+    , sesTo           :: [ByteString]
+    , sesAccessKey    :: ByteString
+    , sesSecretKey    :: ByteString
+    , sesSessionToken :: Maybe ByteString
+    , sesRegion       :: Text
     }
   deriving Show
 
@@ -81,7 +82,10 @@ sendMailSES manager ses msg = liftIO $ do
             { requestHeaders =
                 [ ("Date", date)
                 , ("X-Amzn-Authorization", auth)
-                ]
+                ] ++ case sesSessionToken ses of
+                    Just token -> [("X-Amz-Security-Token", token)]
+                    Nothing    -> []
+
 #if !MIN_VERSION_http_client(0, 5, 0)
             , checkStatus = \_ _ _ -> Nothing
 #endif

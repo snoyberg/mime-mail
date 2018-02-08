@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP, OverloadedStrings, RecordWildCards #-}
-module Mime
+module Network.Mail.Mime
     ( -- * Datatypes
       Boundary (..)
     , Mail (..)

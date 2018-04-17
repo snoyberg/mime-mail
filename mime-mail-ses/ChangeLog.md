@@ -1,3 +1,7 @@
+## 0.4.1
+
+* Add 'renderSendMailSESGlobal' and 'sendMailSESGlobal' function which uses the global manager.
+
 ## 0.4.0.0
 
 * Support IAM temp credentials. This is a backwards-incompatible change that adds

@@ -3,7 +3,9 @@
 {-# LANGUAGE CPP #-}
 module Network.Mail.Mime.SES
     ( sendMailSES
+    , sendMailSESGlobal
     , renderSendMailSES
+    , renderSendMailSESGlobal
     , SES (..)
     , usEast1
     , usWest2
@@ -39,6 +41,7 @@ import           Network.HTTP.Client         (Manager,
                                               withResponse)
 import           Network.HTTP.Client.Conduit (bodyReaderSource)
 import           Network.HTTP.Types          (Status)
+import           Network.HTTP.Client.TLS     (getGlobalManager)
 import           Network.Mail.Mime           (Mail, renderMail')
 import           Text.XML.Stream.Parse       (def, parseBytes)
 
@@ -60,6 +63,13 @@ data SES = SES
 
 renderSendMailSES :: MonadIO m => Manager -> SES -> Mail -> m ()
 renderSendMailSES m ses mail = liftIO (renderMail' mail) >>= sendMailSES m ses
+
+-- | @since 0.4.1
+-- Same as 'renderSendMailSES' but uses the global 'Manager'.
+renderSendMailSESGlobal :: MonadIO m => SES -> Mail -> m ()
+renderSendMailSESGlobal ses mail = do
+  mgr <- liftIO getGlobalManager
+  renderSendMailSES mgr ses mail
 
 sendMailSES :: MonadIO m => Manager -> SES 
             -> L.ByteString -- ^ Raw message data. You must ensure that
@@ -91,7 +101,6 @@ sendMailSES manager ses msg = liftIO $ do
                 ] ++ case sesSessionToken ses of
                     Just token -> [("X-Amz-Security-Token", token)]
                     Nothing    -> []
-
 #if !MIN_VERSION_http_client(0, 5, 0)
             , checkStatus = \_ _ _ -> Nothing
 #endif
@@ -108,6 +117,19 @@ sendMailSES manager ses msg = liftIO $ do
         : zipWith mkDest [1 :: Int ..] (sesTo ses)
     mkDest num addr = (S8.pack $ "Destinations.member." ++ show num, addr)
     format = formatTime defaultTimeLocale "%a, %e %b %Y %H:%M:%S %z"
+
+-- | @since 0.4.1
+-- Same as 'sendMailSES' but uses the global 'Manager'.
+sendMailSESGlobal :: MonadIO m => SES 
+                  -> L.ByteString -- ^ Raw message data. You must ensure that
+                                  -- the message format complies with
+                                  -- Internet email standards regarding
+                                  -- email header fields, MIME types, and
+                                  -- MIME encoding.
+                  -> m ()
+sendMailSESGlobal ses msg = do
+  mgr <- liftIO getGlobalManager
+  sendMailSES mgr ses msg
 
 checkForError :: Status -> Sink Event IO ()
 checkForError status = do

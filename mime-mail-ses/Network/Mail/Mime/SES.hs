@@ -61,7 +61,13 @@ data SES = SES
 renderSendMailSES :: MonadIO m => Manager -> SES -> Mail -> m ()
 renderSendMailSES m ses mail = liftIO (renderMail' mail) >>= sendMailSES m ses
 
-sendMailSES :: MonadIO m => Manager -> SES -> L.ByteString -> m ()
+sendMailSES :: MonadIO m => Manager -> SES 
+            -> L.ByteString -- ^ Raw message data. You must ensure that
+                            -- the message format complies with
+                            -- Internet email standards regarding
+                            -- email header fields, MIME types, and
+                            -- MIME encoding.
+            -> m ()
 sendMailSES manager ses msg = liftIO $ do
     now <- getCurrentTime
     let date = S8.pack $ format now

@@ -15,7 +15,7 @@ extra-source-files:  ChangeLog.md
 
 Library
   Exposed-modules:     Network.Mail.Mime.SES
-  Build-depends:       base               >= 4.6       && < 5
+  Build-depends:       base               >= 4.9       && < 5
                      , base64-bytestring  >= 0.1
                      , bytestring         >= 0.9
                      , time               >= 1.1

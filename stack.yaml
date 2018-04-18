@@ -1,4 +1,4 @@
-resolver: lts-6.17
+resolver: lts-11.5
 packages:
 - mime-mail/
 - mime-mail-ses/

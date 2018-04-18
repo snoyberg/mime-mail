@@ -2,3 +2,8 @@ resolver: lts-11.5
 packages:
 - mime-mail/
 - mime-mail-ses/
+extra-deps:
+- http-client-0.5.12.1@rev:0
+- http-client-tls-0.3.5.3@rev:0
+- http-conduit-2.3.1@rev:0
+- unliftio-core-0.1.1.0@rev:0

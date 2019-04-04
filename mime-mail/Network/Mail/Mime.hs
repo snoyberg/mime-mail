@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, OverloadedStrings #-}
+{-# LANGUAGE CPP, OverloadedStrings, RecordWildCards #-}
 module Network.Mail.Mime
     ( -- * Datatypes
       Boundary (..)
@@ -7,6 +7,7 @@ module Network.Mail.Mime
     , Address (..)
     , Alternatives
     , Part (..)
+    , PartContent (..)
     , Encoding (..)
     , Headers
       -- * Render a message
@@ -22,19 +23,23 @@ module Network.Mail.Mime
     , simpleMail
     , simpleMail'
     , simpleMailInMemory
+    , simpleMailWithImages
       -- * Utilities
     , addPart
     , addAttachment
-    , addAttachmentCid
     , addAttachments
     , addAttachmentBS
-    , addAttachmentBSCid
     , addAttachmentsBS
     , renderAddress
     , htmlPart
     , plainPart
     , randomString
     , quotedPrintable
+    , InlineImage(..)
+    , ImageContent(..)
+    , relatedPart
+    , addImage
+    , mkImageParts
     ) where
 
 import qualified Data.ByteString.Lazy as L
@@ -49,7 +54,7 @@ import System.IO
 import System.Exit
 import System.FilePath (takeFileName)
 import qualified Data.ByteString.Base64 as Base64
-import Control.Monad ((<=<), foldM, void)
+import Control.Monad ((<=<), (>=>), foldM, void)
 import Control.Exception (throwIO, ErrorCall (ErrorCall))
 import Data.List (intersperse)
 import qualified Data.Text.Lazy as LT
@@ -139,18 +144,29 @@ data Part = Part
     , partEncoding :: Encoding
     -- | The filename for this part, if it is to be sent with an attachemnt
     -- disposition.
-    , partFilename :: Maybe Text
+    , partDisposition :: Disposition
     , partHeaders :: Headers
-    , partContent :: L.ByteString
+    , partContent :: PartContent
     }
   deriving (Eq, Show)
 
+-- | NestedParts are for multipart-related: One HTML part and some inline images
+data PartContent = PartContent L.ByteString | NestedParts [Part]
+  deriving (Eq, Show)
+
+data Disposition = AttachmentDisposition Text
+                 | InlineDisposition Text
+                 | DefaultDisposition
+                 deriving (Show, Eq)
+
 type Headers = [(S.ByteString, Text)]
-type Pair = (Headers, Builder)
+
+data Pair = Pair (Headers, Builder)
+          | CompoundPair (Headers, [Pair])
 
 partToPair :: Part -> Pair
-partToPair (Part contentType encoding disposition headers content) =
-    (headers', builder)
+partToPair (Part contentType encoding disposition headers (PartContent content)) =
+    Pair (headers', builder)
   where
     headers' =
         ((:) ("Content-Type", contentType))
@@ -162,10 +178,12 @@ partToPair (Part contentType encoding disposition headers content) =
             QuotedPrintableBinary ->
                 (:) ("Content-Transfer-Encoding", "quoted-printable"))
       $ (case disposition of
-            Nothing -> id
-            Just fn ->
-                (:) ("Content-Disposition", "attachment; filename="
-                                            `T.append` fn))
+            AttachmentDisposition fn ->
+                (:) ("Content-Disposition", "attachment; filename=" `T.append` fn)
+            InlineDisposition cid ->
+                (:) ("Content-Disposition", "inline; filename=" `T.append` cid) . (:) ("Content-ID", "<" <> cid <> ">") . (:) ("Content-Location", cid)
+            DefaultDisposition -> id
+        )
       $ headers
     builder =
         case encoding of
@@ -173,7 +191,14 @@ partToPair (Part contentType encoding disposition headers content) =
             Base64 -> base64 content
             QuotedPrintableText -> quotedPrintable True content
             QuotedPrintableBinary -> quotedPrintable False content
+partToPair (Part contentType encoding disposition headers (NestedParts parts)) =
+    CompoundPair (headers', pairs)
+  where
+    headers' = ("Content-Type", contentType):headers
+    pairs = map partToPair parts
 
+
+-- This function merges sibling pairs into a multipart pair
 showPairs :: RandomGen g
           => Text -- ^ multipart type, eg mixed, alternative
           -> [Pair]
@@ -182,7 +207,7 @@ showPairs :: RandomGen g
 showPairs _ [] _ = error "renderParts called with null parts"
 showPairs _ [pair] gen = (pair, gen)
 showPairs mtype parts gen =
-    ((headers, builder), gen')
+    (Pair (headers, builder), gen')
   where
     (Boundary b, gen') = random gen
     headers =
@@ -200,21 +225,56 @@ showPairs mtype parts gen =
         , showBoundEnd $ Boundary b
         ]
 
+-- This function flattens any compound pairs into a multipart
+-- related, but leaves other pairs in tact
+-- NOTE that this is not recursive, and assumes only one level of nesting.
+flattenCompoundPair :: RandomGen g => Pair -> g -> (Pair, g)
+flattenCompoundPair pair@(Pair _) gen = (pair, gen)
+flattenCompoundPair (CompoundPair (hs, pairs)) gen =
+       (Pair (headers, builder), gen')
+  where
+    (Boundary b, gen') = random gen
+    headers =
+        [ ("Content-Type", T.concat
+            [ "multipart/related" , "; boundary=\"" , b , "\"" ])
+        ]
+    builder = mconcat
+        [ mconcat $ intersperse (fromByteString "\n")
+                  $ map (showBoundPart $ Boundary b) pairs
+        , showBoundEnd $ Boundary b
+        ]
+
+
 -- | Render a 'Mail' with a given 'RandomGen' for producing boundaries.
 renderMail :: RandomGen g => g -> Mail -> (L.ByteString, g)
 renderMail g0 (Mail from to cc bcc headers parts) =
     (toLazyByteString builder, g'')
   where
     addressHeaders = map showAddressHeader [("From", [from]), ("To", to), ("Cc", cc), ("Bcc", bcc)]
-    pairs = map (map partToPair) parts
-    (pairs', g') = helper g0 $ map (showPairs "alternative") pairs
+    -- parts is [Alternative], or [[Part]]
+    -- reverse parts so attachments come at the end
+    pairs :: [[Pair]]
+    pairs = map (map partToPair) (reverse parts)
+
+    (pairs1, g1) = helper2 g0 $ map (map flattenCompoundPair) pairs
+    (pairs', g') = helper g1 $ map (showPairs "alternative") pairs1
+
     helper :: g -> [g -> (x, g)] -> ([x], g)
     helper g [] = ([], g)
     helper g (x:xs) =
         let (b, g_) = x g
             (bs, g__) = helper g_ xs
          in (b : bs, g__)
-    ((finalHeaders, finalBuilder), g'') = showPairs "mixed" pairs' g'
+
+    -- new 2nd order helper
+    helper2 :: g -> [[g -> (x, g)]] -> ([[x]], g)
+    helper2 g [] = ([], g)
+    helper2 g (x:xs) =
+        let (b, g_) = helper g x  -- original helper
+            (bs, g__) = helper2 g_ xs
+         in (b : bs, g__)
+
+    (Pair (finalHeaders, finalBuilder), g'') = showPairs "mixed" pairs' g'
     builder = mconcat
         [ mconcat addressHeaders
         , mconcat $ map showHeader headers
@@ -271,8 +331,8 @@ showAddress a = mconcat
 sanitizeHeader :: Text -> Text
 sanitizeHeader = T.filter (not . isControl)
 
-showBoundPart :: Boundary -> (Headers, Builder) -> Builder
-showBoundPart (Boundary b) (headers, content) = mconcat
+showBoundPart :: Boundary -> Pair -> Builder
+showBoundPart (Boundary b) (Pair (headers, content)) = mconcat
     [ fromByteString "--"
     , fromText b
     , fromByteString "\n"
@@ -331,7 +391,7 @@ sendmailCustomCaptureOutput :: FilePath
                                -> IO (S.ByteString, S.ByteString)
 sendmailCustomCaptureOutput sm opts lbs = sendmailCustomAux True sm opts lbs
 
-sendmailCustomAux :: Bool 
+sendmailCustomAux :: Bool
                      -> FilePath
                      -> [String]
                      -> L.ByteString
@@ -415,6 +475,37 @@ simpleMailInMemory to from subject plainBody htmlBody attachments =
     . addPart [plainPart plainBody, htmlPart htmlBody]
     $ mailFromToSubject from to subject
 
+-- | An interface for generating an email with HTML and plain-text
+-- alternatives, some file attachments, and inline images.
+-- Note that we use lazy IO for reading in the attachment and inlined images.
+-- Inline images can be referred to from the HTML content using
+-- the @src="cid:{{CONTENT-ID}}"@ syntax, where CONTENT-ID is
+-- the filename of the image.
+
+data InlineImage = InlineImage {
+      imageContentType :: Text
+    , imageContent :: ImageContent
+    , imageCID :: Text
+    } deriving Show
+
+data ImageContent = ImageFilePath FilePath | ImageByteString L.ByteString
+  deriving Show
+
+simpleMailWithImages :: [Address] -- ^ to (multiple)
+           -> Address -- ^ from
+           -> Text -- ^ subject
+           -> LT.Text -- ^ plain body
+           -> LT.Text -- ^ HTML body
+           -> [InlineImage]
+           -> [(Text, FilePath)] -- ^ content type and path of attachments
+           -> IO Mail
+simpleMailWithImages to from subject plainBody htmlBody images attachments = do
+    inlineImageParts <- mkImageParts images
+    addAttachments attachments
+      . addPart [ plainPart plainBody
+                , relatedPart ((htmlPart htmlBody):inlineImageParts) ]
+      $ (emptyMail from) { mailTo = to, mailHeaders = [("Subject", subject)] }
+
 mailFromToSubject :: Address -- ^ from
                   -> Address -- ^ to
                   -> Text -- ^ subject
@@ -429,44 +520,49 @@ mailFromToSubject from to subject =
 -- To e.g. add a plain text body use
 -- > addPart [plainPart body] (emptyMail from)
 addPart :: Alternatives -> Mail -> Mail
-addPart alt mail = mail { mailParts = mailParts mail ++ [alt] }
+addPart alt mail = mail { mailParts = alt : mailParts mail }
+
+-- | Add a 'Related' Part
+relatedPart :: [Part] -> Part
+relatedPart parts =
+   Part "multipart/related" None DefaultDisposition [] (NestedParts parts)
 
 -- | Construct a UTF-8-encoded plain-text 'Part'.
 plainPart :: LT.Text -> Part
-plainPart body = Part cType QuotedPrintableText Nothing [] $ LT.encodeUtf8 body
+plainPart body = Part cType QuotedPrintableText DefaultDisposition []
+    $ PartContent (LT.encodeUtf8 body)
   where cType = "text/plain; charset=utf-8"
 
 -- | Construct a UTF-8-encoded html 'Part'.
 htmlPart :: LT.Text -> Part
-htmlPart body = Part cType QuotedPrintableText Nothing [] $ LT.encodeUtf8 body
+htmlPart body = Part cType QuotedPrintableText DefaultDisposition []
+    $ PartContent (LT.encodeUtf8 body)
   where cType = "text/html; charset=utf-8"
 
 -- | Add an attachment from a file and construct a 'Part'.
 addAttachment :: Text -> FilePath -> Mail -> IO Mail
 addAttachment ct fn mail = do
-    part <- getAttachmentPart ct fn
+    content <- L.readFile fn
+    let part = Part ct Base64 (AttachmentDisposition $ T.pack (takeFileName fn)) []
+                  (PartContent content)
     return $ addPart [part] mail
-
--- | Add an attachment from a file and construct a 'Part'
--- with the specified content id in the Content-ID header.
---
--- @since 0.4.12
-addAttachmentCid :: Text -- ^ content type
-                 -> FilePath -- ^ file name
-                 -> Text -- ^ content ID
-                 -> Mail
-                 -> IO Mail
-addAttachmentCid ct fn cid mail =
-  getAttachmentPart ct fn >>= (return.addToMail.addHeader) 
-  where 
-    addToMail part = addPart [part] mail
-    addHeader part = part { partHeaders = header:ph }
-      where ph = partHeaders part
-    header = ("Content-ID", T.concat ["<", cid, ">"])
 
 addAttachments :: [(Text, FilePath)] -> Mail -> IO Mail
 addAttachments xs mail = foldM fun mail xs
   where fun m (c, f) = addAttachment c f m
+
+-- | Add an inline image from a file and construct a 'Part'.
+addImage :: InlineImage -> IO Part
+addImage InlineImage{..} = do
+    content <- case imageContent of
+                ImageFilePath fn -> L.readFile fn
+                ImageByteString bs -> return bs
+    return
+      $ Part imageContentType Base64 (InlineDisposition imageCID) [] (PartContent content)
+
+mkImageParts :: [InlineImage] -> IO [Part]
+mkImageParts xs =
+    mapM addImage xs
 
 -- | Add an attachment from a 'ByteString' and construct a 'Part'.
 --
@@ -476,22 +572,8 @@ addAttachmentBS :: Text -- ^ content type
                 -> L.ByteString -- ^ content
                 -> Mail -> Mail
 addAttachmentBS ct fn content mail =
-    let part = getAttachmentPartBS ct fn content
+    let part = Part ct Base64 (AttachmentDisposition fn) [] (PartContent content)
     in addPart [part] mail
-
--- | @since 0.4.12
-addAttachmentBSCid :: Text -- ^ content type
-                -> Text -- ^ file name
-                -> L.ByteString -- ^ content
-                -> Text -- ^ content ID
-                -> Mail -> Mail
-addAttachmentBSCid ct fn content cid mail =
-    let part = addHeader $ getAttachmentPartBS ct fn content
-    in addPart [part] mail
-    where
-      addHeader part = part { partHeaders = header:ph }
-        where ph = partHeaders part
-      header = ("Content-ID", T.concat ["<", cid, ">"])
 
 -- |
 -- Since 0.4.7
@@ -499,16 +581,6 @@ addAttachmentsBS :: [(Text, Text, L.ByteString)] -> Mail -> Mail
 addAttachmentsBS xs mail = foldl fun mail xs
   where fun m (ct, fn, content) = addAttachmentBS ct fn content m
 
-getAttachmentPartBS :: Text
-                    -> Text
-                    -> L.ByteString
-                    -> Part
-getAttachmentPartBS ct fn content = Part ct Base64 (Just fn) [] content
-
-getAttachmentPart :: Text -> FilePath -> IO Part
-getAttachmentPart ct fn = do
-    content <- L.readFile fn
-    return $ getAttachmentPartBS ct (T.pack (takeFileName fn)) content
 
 data QP = QPPlain S.ByteString
         | QPNewline

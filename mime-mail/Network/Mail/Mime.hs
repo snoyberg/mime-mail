@@ -8,7 +8,10 @@ module Network.Mail.Mime
     , Alternatives
     , Part (..)
     , PartContent (..)
+    , Disposition (..)
     , Encoding (..)
+    , InlineImage(..)
+    , ImageContent(..)
     , Headers
       -- * Render a message
     , renderMail
@@ -33,10 +36,10 @@ module Network.Mail.Mime
     , renderAddress
     , htmlPart
     , plainPart
+    , filePart
+    , filePartBS
     , randomString
     , quotedPrintable
-    , InlineImage(..)
-    , ImageContent(..)
     , relatedPart
     , addImage
     , mkImageParts
@@ -475,12 +478,6 @@ simpleMailInMemory to from subject plainBody htmlBody attachments =
     . addPart [plainPart plainBody, htmlPart htmlBody]
     $ mailFromToSubject from to subject
 
--- | An interface for generating an email with HTML and plain-text
--- alternatives, some file attachments, and inline images.
--- Note that we use lazy IO for reading in the attachment and inlined images.
--- Inline images can be referred to from the HTML content using
--- the @src="cid:{{CONTENT-ID}}"@ syntax, where CONTENT-ID is
--- the filename of the image.
 
 data InlineImage = InlineImage {
       imageContentType :: Text
@@ -491,6 +488,14 @@ data InlineImage = InlineImage {
 data ImageContent = ImageFilePath FilePath | ImageByteString L.ByteString
   deriving Show
 
+-- | An interface for generating an email with HTML and plain-text
+-- alternatives, some file attachments, and inline images.
+-- Note that we use lazy IO for reading in the attachment and inlined images.
+-- Inline images can be referred to from the HTML content using
+-- the @src="cid:{{CONTENT-ID}}"@ syntax, where CONTENT-ID is
+-- the filename of the image.
+--
+-- Since 0.5.0
 simpleMailWithImages :: [Address] -- ^ to (multiple)
            -> Address -- ^ from
            -> Text -- ^ subject
@@ -539,12 +544,24 @@ htmlPart body = Part cType QuotedPrintableText DefaultDisposition []
     $ PartContent (LT.encodeUtf8 body)
   where cType = "text/html; charset=utf-8"
 
+-- | Construct a BASE64-encoded file attachment 'Part'
+--
+-- Since 0.5.0
+filePart :: Text -> FilePath -> IO Part
+filePart ct fn = do
+    content <- L.readFile fn
+    return $ filePartBS ct (T.pack (takeFileName fn)) content
+
+-- | Construct a BASE64-encoded file attachment 'Part'
+--
+-- Since 0.5.0
+filePartBS :: Text -> Text -> L.ByteString -> Part
+filePartBS ct filename content = Part ct Base64 (AttachmentDisposition filename) [] (PartContent content)
+
 -- | Add an attachment from a file and construct a 'Part'.
 addAttachment :: Text -> FilePath -> Mail -> IO Mail
 addAttachment ct fn mail = do
-    content <- L.readFile fn
-    let part = Part ct Base64 (AttachmentDisposition $ T.pack (takeFileName fn)) []
-                  (PartContent content)
+    part <- filePart ct fn
     return $ addPart [part] mail
 
 addAttachments :: [(Text, FilePath)] -> Mail -> IO Mail
@@ -552,6 +569,8 @@ addAttachments xs mail = foldM fun mail xs
   where fun m (c, f) = addAttachment c f m
 
 -- | Add an inline image from a file and construct a 'Part'.
+--
+-- Since 0.5.0
 addImage :: InlineImage -> IO Part
 addImage InlineImage{..} = do
     content <- case imageContent of
@@ -571,9 +590,7 @@ addAttachmentBS :: Text -- ^ content type
                 -> Text -- ^ file name
                 -> L.ByteString -- ^ content
                 -> Mail -> Mail
-addAttachmentBS ct fn content mail =
-    let part = Part ct Base64 (AttachmentDisposition fn) [] (PartContent content)
-    in addPart [part] mail
+addAttachmentBS ct fn content mail = addPart [filePartBS ct fn content] mail
 
 -- |
 -- Since 0.4.7

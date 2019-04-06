@@ -1,3 +1,11 @@
+## 0.5
+
+* Add support for inline images and multipart/related
+* Add `filePart` and `filePartBS` for attachments
+* Change `Part` data type (`Disposition` and `PartContent`)
+* Remove `addAttachmentCid` and `addAttachmentBSCid` (replaced by `addImage`)
+* Remove `getAttachmentPartBS` and `getAttachmentPart`
+
 ## 0.4.14
 
 * Add `IsString` instance for `Address`

@@ -1,12 +1,12 @@
 Name:                mime-mail
-Version:             0.4.14
+Version:             0.5.0
 Synopsis:            Compose MIME email messages.
 description:         Hackage documentation generation is not reliable. For up to date documentation, please see: <http://www.stackage.org/package/mime-mail>.
 Homepage:            http://github.com/snoyberg/mime-mail
 License:             MIT
 License-file:        LICENSE
 Author:              Michael Snoyman <michael@snoyman.com>
-Maintainer:          Michael Snoyman <michael@snoyman.com>
+Maintainer:          Michael Snoyman <michael@snoyman.com>, Marek Suchánek <marek.suchanek@fit.cvut.cz>
 Category:            Email
 Build-type:          Simple
 extra-source-files:  README.md

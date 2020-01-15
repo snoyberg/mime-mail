@@ -267,7 +267,7 @@ renderMailM (Mail from to cc bcc headers parts) = do
 
     pairs1 <- mapM (mapM flattenCompoundPair) pairs
     pairs' <- mapM (showPairs "alternative") pairs1
-    Pair (finalHeaders, finalBuilder) <- showPairs "mixed" pairs'
+    ~(Pair (finalHeaders, finalBuilder)) <- showPairs "mixed" pairs'
 
     let
       builder = mconcat

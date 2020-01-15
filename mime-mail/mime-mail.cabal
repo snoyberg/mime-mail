@@ -26,6 +26,7 @@ Library
                  , bytestring          >= 0.9.1
                  , text                >= 0.7
                  , filepath            >= 1.2
+                 , MonadRandom         >= 0.5
 
 test-suite tests
     type: exitcode-stdio-1.0

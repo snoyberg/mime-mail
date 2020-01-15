@@ -16,6 +16,7 @@ module Network.Mail.Mime
       -- * Render a message
     , renderMail
     , renderMail'
+    , renderMailM
       -- * Sending messages
     , sendmail
     , sendmailCustom
@@ -39,6 +40,7 @@ module Network.Mail.Mime
     , filePart
     , filePartBS
     , randomString
+    , randomStringM
     , quotedPrintable
     , relatedPart
     , addImage
@@ -58,6 +60,7 @@ import System.Exit
 import System.FilePath (takeFileName)
 import qualified Data.ByteString.Base64 as Base64
 import Control.Monad ((<=<), (>=>), foldM, void)
+import Control.Monad.Random (MonadRandom, getRandom, getRandomRs, runRand)
 import Control.Exception (throwIO, ErrorCall (ErrorCall))
 import Data.List (intersperse)
 import qualified Data.Text.Lazy as LT
@@ -74,14 +77,12 @@ import qualified Data.Text.Encoding as TE
 
 -- | Generates a random sequence of alphanumerics of the given length.
 randomString :: RandomGen d => Int -> d -> (String, d)
-randomString len =
-    first (map toChar) . sequence' (replicate len (randomR (0, 61)))
+randomString len = runRand (randomStringM len)
+
+-- | Generates a random sequence of alphanumerics of the given length.
+randomStringM :: MonadRandom m => Int -> m String
+randomStringM len = map toChar . take len <$> getRandomRs (0, 61)
   where
-    sequence' [] g = ([], g)
-    sequence' (f:fs) g =
-        let (f', g') = f g
-            (fs', g'') = sequence' fs g'
-         in (f' : fs', g'')
     toChar i
         | i < 26 = toEnum $ i + fromEnum 'A'
         | i < 52 = toEnum $ i + fromEnum 'a' - 26
@@ -202,90 +203,82 @@ partToPair (Part contentType encoding disposition headers (NestedParts parts)) =
 
 
 -- This function merges sibling pairs into a multipart pair
-showPairs :: RandomGen g
+showPairs :: MonadRandom m
           => Text -- ^ multipart type, eg mixed, alternative
           -> [Pair]
-          -> g
-          -> (Pair, g)
-showPairs _ [] _ = error "renderParts called with null parts"
-showPairs _ [pair] gen = (pair, gen)
-showPairs mtype parts gen =
-    (Pair (headers, builder), gen')
-  where
-    (Boundary b, gen') = random gen
-    headers =
-        [ ("Content-Type", T.concat
-            [ "multipart/"
-            , mtype
-            , "; boundary=\""
-            , b
-            , "\""
-            ])
-        ]
-    builder = mconcat
-        [ mconcat $ intersperse (fromByteString "\n")
-                  $ map (showBoundPart $ Boundary b) parts
-        , showBoundEnd $ Boundary b
-        ]
+          -> m Pair
+showPairs _ [] = error "renderParts called with null parts"
+showPairs _ [pair] = return pair
+showPairs mtype parts = do
+    Boundary b <- getRandom
+    let
+      headers =
+          [ ("Content-Type", T.concat
+              [ "multipart/"
+              , mtype
+              , "; boundary=\""
+              , b
+              , "\""
+              ])
+          ]
+      builder = mconcat
+          [ mconcat $ intersperse (fromByteString "\n")
+                    $ map (showBoundPart $ Boundary b) parts
+          , showBoundEnd $ Boundary b
+          ]
+    return $ Pair (headers, builder)
+
 
 -- This function flattens any compound pairs into a multipart
 -- related, but leaves other pairs in tact
 -- NOTE that this is not recursive, and assumes only one level of nesting.
-flattenCompoundPair :: RandomGen g => Pair -> g -> (Pair, g)
-flattenCompoundPair pair@(Pair _) gen = (pair, gen)
-flattenCompoundPair (CompoundPair (hs, pairs)) gen =
-       (Pair (headers, builder), gen')
-  where
-    (Boundary b, gen') = random gen
-    headers =
-        [ ("Content-Type", T.concat
-            [ "multipart/related" , "; boundary=\"" , b , "\"" ])
-        ]
-    builder = mconcat
-        [ mconcat $ intersperse (fromByteString "\n")
-                  $ map (showBoundPart $ Boundary b) pairs
-        , showBoundEnd $ Boundary b
-        ]
+flattenCompoundPair :: MonadRandom m => Pair -> m Pair
+flattenCompoundPair pair@(Pair _) = return pair
+flattenCompoundPair (CompoundPair (hs, pairs)) = do
+    Boundary b <- getRandom
+    let
+      headers =
+          [ ("Content-Type", T.concat
+              [ "multipart/related" , "; boundary=\"" , b , "\"" ])
+          ]
+      builder = mconcat
+          [ mconcat $ intersperse (fromByteString "\n")
+                    $ map (showBoundPart $ Boundary b) pairs
+          , showBoundEnd $ Boundary b
+          ]
+    return $ Pair (headers, builder)
 
 
 -- | Render a 'Mail' with a given 'RandomGen' for producing boundaries.
 renderMail :: RandomGen g => g -> Mail -> (L.ByteString, g)
-renderMail g0 (Mail from to cc bcc headers parts) =
-    (toLazyByteString builder, g'')
-  where
-    addressHeaders = map showAddressHeader [("From", [from]), ("To", to), ("Cc", cc), ("Bcc", bcc)]
-    -- parts is [Alternative], or [[Part]]
-    -- reverse parts so attachments come at the end
-    pairs :: [[Pair]]
-    pairs = map (map partToPair) (reverse parts)
+renderMail g m = runRand (renderMailM m) g
 
-    (pairs1, g1) = helper2 g0 $ map (map flattenCompoundPair) pairs
-    (pairs', g') = helper g1 $ map (showPairs "alternative") pairs1
 
-    helper :: g -> [g -> (x, g)] -> ([x], g)
-    helper g [] = ([], g)
-    helper g (x:xs) =
-        let (b, g_) = x g
-            (bs, g__) = helper g_ xs
-         in (b : bs, g__)
+-- | Render a 'Mail' in a monadic context
+renderMailM :: MonadRandom m => Mail -> m L.ByteString
+renderMailM (Mail from to cc bcc headers parts) = do
+    let
+      addressHeaders = map showAddressHeader [("From", [from]), ("To", to), ("Cc", cc), ("Bcc", bcc)]
 
-    -- new 2nd order helper
-    helper2 :: g -> [[g -> (x, g)]] -> ([[x]], g)
-    helper2 g [] = ([], g)
-    helper2 g (x:xs) =
-        let (b, g_) = helper g x  -- original helper
-            (bs, g__) = helper2 g_ xs
-         in (b : bs, g__)
+      -- parts is [Alternative], or [[Part]]
+      -- reverse parts so attachments come at the end
+      pairs :: [[Pair]]
+      pairs = map (map partToPair) (reverse parts)
 
-    (Pair (finalHeaders, finalBuilder), g'') = showPairs "mixed" pairs' g'
-    builder = mconcat
-        [ mconcat addressHeaders
-        , mconcat $ map showHeader headers
-        , showHeader ("MIME-Version", "1.0")
-        , mconcat $ map showHeader finalHeaders
-        , fromByteString "\n"
-        , finalBuilder
-        ]
+    pairs1 <- mapM (mapM flattenCompoundPair) pairs
+    pairs' <- mapM (showPairs "alternative") pairs1
+    Pair (finalHeaders, finalBuilder) <- showPairs "mixed" pairs'
+
+    let
+      builder = mconcat
+          [ mconcat addressHeaders
+          , mconcat $ map showHeader headers
+          , showHeader ("MIME-Version", "1.0")
+          , mconcat $ map showHeader finalHeaders
+          , fromByteString "\n"
+          , finalBuilder
+          ]
+    return $ toLazyByteString builder
 
 -- | Format an E-Mail address according to the name-addr form (see: RFC5322
 -- § 3.4 "Address specification", i.e: [display-name] '<'addr-spec'>')

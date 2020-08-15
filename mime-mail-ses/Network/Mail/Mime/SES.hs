@@ -15,9 +15,6 @@ module Network.Mail.Mime.SES
 
 import           Control.Exception           (Exception, throwIO)
 import           Control.Monad.IO.Class      (MonadIO, liftIO)
-import           Crypto.Hash                 (Digest, SHA256, hmac,
-                                              hmacGetDigest)
-import           Data.Byteable               (toBytes)
 import           Data.ByteString             (ByteString)
 import           Data.ByteString.Base64      (encode)
 import qualified Data.ByteString.Char8       as S8
@@ -25,17 +22,11 @@ import qualified Data.ByteString.Lazy        as L
 import           Data.Conduit                (Sink, await, ($$), (=$))
 import           Data.Text                   (Text)
 import qualified Data.Text                   as T
+import qualified Data.Text.Encoding          as E
 import           Data.Time                   (getCurrentTime)
-import           Data.Time.Format            (formatTime)
 import           Data.Typeable               (Typeable)
 import           Data.XML.Types              (Content (ContentText), Event (EventBeginElement, EventContent))
 import           Network.HTTP.Client         (Manager,
-#if MIN_VERSION_http_client(0, 5, 0)
-                                              parseRequest,
-#else
-                                              checkStatus,
-                                              parseUrl,
-#endif
                                               requestHeaders, responseBody,
                                               responseStatus, urlEncodedBody,
                                               withResponse)
@@ -45,11 +36,7 @@ import           Network.HTTP.Client.TLS     (getGlobalManager)
 import           Network.Mail.Mime           (Mail, renderMail')
 import           Text.XML.Stream.Parse       (def, parseBytes)
 
-#if MIN_VERSION_time(1,5,0)
-import           Data.Time                   (defaultTimeLocale)
-#else
-import           System.Locale               (defaultTimeLocale)
-#endif
+import Network.Mail.Mime.SES.Internal
 
 data SES = SES
     { sesFrom         :: !ByteString
@@ -80,32 +67,21 @@ sendMailSES :: MonadIO m => Manager -> SES
             -> m ()
 sendMailSES manager ses msg = liftIO $ do
     now <- getCurrentTime
-    let date = S8.pack $ format now
-        sig = makeSig date $ sesSecretKey ses
-        region = T.unpack $ sesRegion ses
-#if MIN_VERSION_http_client(0, 5, 0)
-    req' <- parseRequest $ concat ["https://email.", region , ".amazonaws.com"]
-#else
-    req' <- parseUrl $ concat ["https://email.", region , ".amazonaws.com"]
-#endif
-    let auth = S8.concat
-            [ "AWS3-HTTPS AWSAccessKeyId="
-            , sesAccessKey ses
-            , ", Algorithm=HmacSHA256, Signature="
-            , sig
-            ]
-    let req = urlEncodedBody qs $ req'
-            { requestHeaders =
-                [ ("Date", date)
-                , ("X-Amzn-Authorization", auth)
-                ] ++ case sesSessionToken ses of
-                    Just token -> [("X-Amz-Security-Token", token)]
-                    Nothing    -> []
-#if !MIN_VERSION_http_client(0, 5, 0)
-            , checkStatus = \_ _ _ -> Nothing
-#endif
-            }
-    withResponse req manager $ \res ->
+    requestBase <- buildRequest (concat ["https://email.", T.unpack (sesRegion ses) , ".amazonaws.com"])
+    let headers =
+          [ ("Date", formatAmazonTime now)
+          ]
+          ++ case sesSessionToken ses of
+               Just token -> [("X-Amz-Security-Token", token)]
+               Nothing    -> []
+    let tentativeRequest = urlEncodedBody qs $ requestBase {requestHeaders = headers}
+        canonicalRequest = canonicalizeRequest tentativeRequest
+        stringToSign = makeStringToSign "ses" now (E.encodeUtf8 (sesRegion ses)) canonicalRequest
+        sig = makeSig "ses" now (E.encodeUtf8 (sesRegion ses)) (sesSecretKey ses) stringToSign
+        authorizationString = makeAuthorizationString "ses" now (E.encodeUtf8 (sesRegion ses))
+                              (patchedRequestHeaders tentativeRequest) (sesAccessKey ses) sig
+        finalRequest = tentativeRequest {requestHeaders = ("Authorization", authorizationString): requestHeaders tentativeRequest}
+    withResponse finalRequest manager $ \res ->
            bodyReaderSource (responseBody res)
         $$ parseBytes def
         =$ checkForError (responseStatus res)
@@ -116,7 +92,6 @@ sendMailSES manager ses msg = liftIO $ do
         : ("RawMessage.Data", encode $ S8.concat $ L.toChunks msg)
         : zipWith mkDest [1 :: Int ..] (sesTo ses)
     mkDest num addr = (S8.pack $ "Destinations.member." ++ show num, addr)
-    format = formatTime defaultTimeLocale "%a, %e %b %Y %H:%M:%S %z"
 
 -- | @since 0.4.1
 -- Same as 'sendMailSES' but uses the global 'Manager'.
@@ -181,10 +156,6 @@ data SESException = SESException
     }
     deriving (Show, Typeable)
 instance Exception SESException
-
-makeSig :: ByteString -> ByteString -> ByteString
-makeSig payload key =
-    encode $ toBytes (hmacGetDigest $ hmac key payload :: Digest SHA256)
 
 usEast1 :: Text
 usEast1 = "us-east-1"

@@ -14,7 +14,7 @@ extra-source-files:  ChangeLog.md
                      README.md
 
 Library
-  Exposed-modules:     Network.Mail.Mime.SES
+  Exposed-modules:     Network.Mail.Mime.SES, Network.Mail.Mime.SES.Internal
   Build-depends:       base               >= 4.9       && < 5
                      , base64-bytestring  >= 0.1
                      , bytestring         >= 0.9
@@ -32,6 +32,8 @@ Library
                      , conduit
                      , cryptohash         >= 0.7.3
                      , byteable
+                     , case-insensitive
+                     , base16-bytestring
   ghc-options: -Wall
 
 Executable send-aws
@@ -44,3 +46,16 @@ Executable send-aws
                , mime-mail
                , mime-mail-ses
                , text
+
+Test-suite by-the-book
+           type: exitcode-stdio-1.0
+           hs-source-dirs: test/by-the-book
+           main-is: Main.hs
+           build-depends: base
+                        , mime-mail-ses
+                        , tasty
+                        , tasty-hunit
+                        , bytestring
+                        , time
+                        , case-insensitive
+           ghc-options: -Wall

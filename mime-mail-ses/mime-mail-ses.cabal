@@ -16,33 +16,33 @@ extra-source-files:  ChangeLog.md
 Library
   Exposed-modules:     Network.Mail.Mime.SES, Network.Mail.Mime.SES.Internal
   Build-depends:       base               >= 4.9       && < 5
+                     , base16-bytestring
                      , base64-bytestring  >= 0.1
+                     , byteable
                      , bytestring         >= 0.9
-                     , time               >= 1.1
+                     , case-insensitive
+                     , conduit
+                     , cryptohash         >= 0.7.3
                      , http-client        >= 0.2.2.2
                      , http-client-tls    >= 0.2.4
                      , http-conduit       >= 2.1
-                     , mime-mail          >= 0.3
                      , http-types         >= 0.6.8
+                     , mime-mail          >= 0.3
+                     , text
+                     , time               >= 1.1
                      , xml-conduit
                      , xml-types
-                     , text
-                     , conduit
-                     , cryptohash         >= 0.7.3
-                     , byteable
-                     , case-insensitive
-                     , base16-bytestring
   ghc-options: -Wall
 
 Executable send-aws
   hs-source-dirs: send-aws
   Main-Is: Main.hs
   build-depends: base
-               , optparse-applicative
                , http-client
                , http-client-tls
                , mime-mail
                , mime-mail-ses
+               , optparse-applicative
                , text
 
 Test-suite by-the-book
@@ -50,10 +50,10 @@ Test-suite by-the-book
            hs-source-dirs: test/by-the-book
            main-is: Main.hs
            build-depends: base
+                        , bytestring
+                        , case-insensitive
                         , mime-mail-ses
                         , tasty
                         , tasty-hunit
-                        , bytestring
                         , time
-                        , case-insensitive
            ghc-options: -Wall

@@ -19,12 +19,10 @@ Library
                      , base64-bytestring  >= 0.1
                      , bytestring         >= 0.9
                      , time               >= 1.1
-                     , old-locale
                      , http-client        >= 0.2.2.2
                      , http-client-tls    >= 0.2.4
                      , http-conduit       >= 2.1
                      , mime-mail          >= 0.3
-                     , transformers       >= 0.2
                      , http-types         >= 0.6.8
                      , xml-conduit
                      , xml-types

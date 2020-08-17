@@ -9,7 +9,7 @@ Author:              Michael Snoyman
 Maintainer:          michael@snoyman.com
 Category:            Web
 Build-type:          Simple
-Cabal-version:       >=1.6
+Cabal-version:       >=1.8
 extra-source-files:  ChangeLog.md
                      README.md
 
@@ -33,3 +33,14 @@ Library
                      , cryptohash         >= 0.7.3
                      , byteable
   ghc-options: -Wall
+
+Executable send-aws
+  hs-source-dirs: send-aws
+  Main-Is: Main.hs
+  build-depends: base
+               , optparse-applicative
+               , http-client
+               , http-client-tls
+               , mime-mail
+               , mime-mail-ses
+               , text

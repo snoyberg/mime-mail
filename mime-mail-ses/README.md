@@ -13,11 +13,11 @@ Example:
 
     % cabal run :send-aws -- \
         --subject 'Checking if AWS works.' \
-        --from '<i>your e-mail address</i>' \
-        --to '<i>your e-mail address</i>' \
-        --key '<i>your key ID</i>' \
+        --from 'your e-mail address' \
+        --to 'your e-mail address' \
+        --key 'your key ID' \
         --region 'us-east-2'
     Up to date
-    Enter AWS secret: <i>your secret key</i>
+    Enter AWS secret: your secret key
     Enter message below.
     This is a test letter sent from command line.

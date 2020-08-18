@@ -9,7 +9,7 @@ Author:              Michael Snoyman
 Maintainer:          michael@snoyman.com
 Category:            Web
 Build-type:          Simple
-Cabal-version:       >=1.8
+Cabal-version:       >=1.10
 extra-source-files:  ChangeLog.md
                      README.md
 

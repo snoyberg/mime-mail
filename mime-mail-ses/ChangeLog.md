@@ -1,3 +1,8 @@
+## 0.5.1
+
+* Add executable `send-aws` for sending e-mails via Amazon SES from command line.
+* Update Signature Version for Amazon SES from 3 to 4.
+
 ## 0.4.1
 
 * Add 'renderSendMailSESGlobal' and 'sendMailSESGlobal' function which uses the global manager.

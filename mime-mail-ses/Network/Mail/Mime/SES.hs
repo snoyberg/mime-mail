@@ -3,6 +3,7 @@
 {-# LANGUAGE CPP #-}
 module Network.Mail.Mime.SES
     ( sendMailSES
+    , sendMailSESWithResponse
     , sendMailSESGlobal
     , renderSendMailSES
     , renderSendMailSESGlobal
@@ -65,7 +66,17 @@ sendMailSES :: MonadIO m => Manager -> SES
                             -- email header fields, MIME types, and
                             -- MIME encoding.
             -> m ()
-sendMailSES manager ses msg = liftIO $ do
+sendMailSES manager ses msg =
+  sendMailSESWithResponse manager ses msg checkForError
+
+-- | @since 0.4.3
+-- Generalised version of 'sendMailSES' which allows customising the final return type.
+sendMailSESWithResponse :: MonadIO m => Manager -> SES
+                        -> L.ByteString
+                        -> (Status -> Sink Event IO a)
+                        -- ^ What to do with the HTTP 'Status' returned in the 'Response'.
+                        -> m a
+sendMailSESWithResponse manager ses msg onResponseStatus = liftIO $ do
     now <- getCurrentTime
     requestBase <- buildRequest (concat ["https://email.", T.unpack (sesRegion ses) , ".amazonaws.com"])
     let headers =
@@ -84,7 +95,7 @@ sendMailSES manager ses msg = liftIO $ do
     withResponse finalRequest manager $ \res ->
            bodyReaderSource (responseBody res)
         $$ parseBytes def
-        =$ checkForError (responseStatus res)
+        =$ onResponseStatus (responseStatus res)
   where
     qs =
           ("Action", "SendRawEmail")

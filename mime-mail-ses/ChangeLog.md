@@ -1,4 +1,4 @@
-## 0.5.1
+## 0.4.2
 
 * Add executable `send-aws` for sending e-mails via Amazon SES from command line.
 * Update Signature Version for Amazon SES from 3 to 4.

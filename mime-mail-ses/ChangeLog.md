@@ -1,3 +1,7 @@
+## 0.4.3
+
+* Add function 'sendMailSESWithResponse'.
+
 ## 0.4.2
 
 * Add executable `send-aws` for sending e-mails via Amazon SES from command line.

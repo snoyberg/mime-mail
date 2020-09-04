@@ -1,5 +1,5 @@
 Name:                mime-mail-ses
-Version:             0.4.2
+Version:             0.4.3
 Synopsis:            Send mime-mail messages via Amazon SES
 description:         Hackage documentation generation is not reliable. For up to date documentation, please see: <http://www.stackage.org/package/mime-mail-ses>.
 Homepage:            http://github.com/snoyberg/mime-mail

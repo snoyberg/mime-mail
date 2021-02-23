@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, OverloadedStrings, RecordWildCards #-}
+{-# LANGUAGE CPP, DeriveGeneric, OverloadedStrings, RecordWildCards #-}
 module Network.Mail.Mime
     ( -- * Datatypes
       Boundary (..)
@@ -71,6 +71,7 @@ import qualified Data.ByteString as S
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
+import GHC.Generics (Generic)
 
 -- | Generates a random sequence of alphanumerics of the given length.
 randomString :: RandomGen d => Int -> d -> (String, d)
@@ -110,7 +111,7 @@ data Mail = Mail
     -- version last.
     , mailParts :: [Alternatives]
     }
-  deriving Show
+  deriving (Show, Generic)
 
 -- | A mail message with the provided 'from' address and no other
 -- fields filled in.
@@ -128,14 +129,14 @@ data Address = Address
     { addressName  :: Maybe Text
     , addressEmail :: Text
     }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 instance IsString Address where
     fromString = Address Nothing . Data.String.fromString
 
 -- | How to encode a single part. You should use 'Base64' for binary data.
 data Encoding = None | Base64 | QuotedPrintableText | QuotedPrintableBinary
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 -- | Multiple alternative representations of the same data. For example, you
 -- could provide a plain-text and HTML version of a message.
@@ -151,16 +152,16 @@ data Part = Part
     , partHeaders :: Headers
     , partContent :: PartContent
     }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 -- | NestedParts are for multipart-related: One HTML part and some inline images
 data PartContent = PartContent L.ByteString | NestedParts [Part]
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 data Disposition = AttachmentDisposition Text
                  | InlineDisposition Text
                  | DefaultDisposition
-                 deriving (Show, Eq)
+                 deriving (Show, Eq, Generic)
 
 type Headers = [(S.ByteString, Text)]
 

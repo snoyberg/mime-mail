@@ -1,3 +1,7 @@
+## 0.5.1
+
+* Add `Generic` instances for types used in `Mail`
+
 ## 0.5
 
 * Add support for inline images and multipart/related

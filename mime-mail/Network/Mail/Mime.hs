@@ -163,7 +163,11 @@ data Disposition = AttachmentDisposition Text
                  | DefaultDisposition
                  deriving (Show, Eq, Generic)
 
-type Headers = [(S.ByteString, Text)]
+data Header = Header (S.ByteString, Text)
+            | ContentDispositionHeader (S.ByteString, Text)
+    deriving (Show, Eq)
+
+type Headers = [ Header ]
 
 data Pair = Pair (Headers, Builder)
           | CompoundPair (Headers, [Pair])
@@ -173,19 +177,19 @@ partToPair (Part contentType encoding disposition headers (PartContent content))
     Pair (headers', builder)
   where
     headers' =
-        ((:) ("Content-Type", contentType))
+        ((:) (Header ("Content-Type", contentType)))
       $ (case encoding of
             None -> id
-            Base64 -> (:) ("Content-Transfer-Encoding", "base64")
+            Base64 -> (:) (Header ("Content-Transfer-Encoding", "base64"))
             QuotedPrintableText ->
-                (:) ("Content-Transfer-Encoding", "quoted-printable")
+                (:) (Header ("Content-Transfer-Encoding", "quoted-printable"))
             QuotedPrintableBinary ->
-                (:) ("Content-Transfer-Encoding", "quoted-printable"))
+                (:) (Header ("Content-Transfer-Encoding", "quoted-printable")))
       $ (case disposition of
             AttachmentDisposition fn ->
-                (:) ("Content-Disposition", "attachment; filename=" `T.append` fn)
+                (:) (ContentDispositionHeader ("attachment", fn))
             InlineDisposition cid ->
-                (:) ("Content-Disposition", "inline; filename=" `T.append` cid) . (:) ("Content-ID", "<" <> cid <> ">") . (:) ("Content-Location", cid)
+                (:) (ContentDispositionHeader ("inline", cid)) . (:) (Header ("Content-ID", "<" <> cid <> ">")) . (:) (Header ("Content-Location", cid))
             DefaultDisposition -> id
         )
       $ headers
@@ -198,7 +202,7 @@ partToPair (Part contentType encoding disposition headers (PartContent content))
 partToPair (Part contentType encoding disposition headers (NestedParts parts)) =
     CompoundPair (headers', pairs)
   where
-    headers' = ("Content-Type", contentType):headers
+    headers' = (Header ("Content-Type", contentType)):headers
     pairs = map partToPair parts
 
 
@@ -215,7 +219,7 @@ showPairs mtype parts gen =
   where
     (Boundary b, gen') = random gen
     headers =
-        [ ("Content-Type", T.concat
+        [ Header ("Content-Type", T.concat
             [ "multipart/"
             , mtype
             , "; boundary=\""
@@ -239,7 +243,7 @@ flattenCompoundPair (CompoundPair (hs, pairs)) gen =
   where
     (Boundary b, gen') = random gen
     headers =
-        [ ("Content-Type", T.concat
+        [ Header ("Content-Type", T.concat
             [ "multipart/related" , "; boundary=\"" , b , "\"" ])
         ]
     builder = mconcat
@@ -282,7 +286,7 @@ renderMail g0 (Mail from to cc bcc headers parts) =
     builder = mconcat
         [ mconcat addressHeaders
         , mconcat $ map showHeader headers
-        , showHeader ("MIME-Version", "1.0")
+        , showHeader $ Header ("MIME-Version", "1.0")
         , mconcat $ map showHeader finalHeaders
         , fromByteString "\n"
         , finalBuilder
@@ -301,12 +305,20 @@ renderAddress address =
 sanitizeFieldName :: S.ByteString -> S.ByteString
 sanitizeFieldName = S.filter (\w -> w >= 33 && w <= 126 && w /= 58)
 
-showHeader :: (S.ByteString, Text) -> Builder
-showHeader (k, v) = mconcat
+showHeader :: Header -> Builder
+showHeader (Header (k, v)) = mconcat
     [ fromByteString (sanitizeFieldName k)
     , fromByteString ": "
     , encodeIfNeeded (sanitizeHeader v)
     , fromByteString "\n"
+    ]
+
+showHeader (ContentDispositionHeader (cd, fn)) = mconcat
+    [ fromByteString "Content-Disposition: "
+    , fromByteString cd
+    , fromByteString "; filename=\""
+    , encodeIfNeeded fn
+    , fromByteString "\"\n"
     ]
 
 showAddressHeader :: (S.ByteString, [Address]) -> Builder
@@ -510,7 +522,7 @@ simpleMailWithImages to from subject plainBody htmlBody images attachments = do
     addAttachments attachments
       . addPart [ plainPart plainBody
                 , relatedPart ((htmlPart htmlBody):inlineImageParts) ]
-      $ (emptyMail from) { mailTo = to, mailHeaders = [("Subject", subject)] }
+      $ (emptyMail from) { mailTo = to, mailHeaders = [Header ("Subject", subject)] }
 
 mailFromToSubject :: Address -- ^ from
                   -> Address -- ^ to
@@ -518,7 +530,7 @@ mailFromToSubject :: Address -- ^ from
                   -> Mail
 mailFromToSubject from to subject =
     (emptyMail from) { mailTo = [to]
-                     , mailHeaders = [("Subject", subject)]
+                     , mailHeaders = [Header ("Subject", subject)]
                      }
 
 -- | Add an 'Alternative' to the 'Mail's parts.

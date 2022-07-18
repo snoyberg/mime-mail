@@ -1,7 +1,4 @@
-{-# LANGUAGE CPP               #-}
-{-# LANGUAGE DeriveGeneric     #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE CPP, DeriveGeneric, OverloadedStrings, RecordWildCards #-}
 module Network.Mail.Mime
     ( -- * Datatypes
       Boundary (..)
@@ -46,37 +43,36 @@ module Network.Mail.Mime
     , relatedPart
     , addImage
     , mkImageParts
+    , encodeIfNeeded
     ) where
 
-import           Blaze.ByteString.Builder
-import           Blaze.ByteString.Builder.Char.Utf8
-import           Control.Arrow
-import           Control.Concurrent                 (forkIO, newEmptyMVar,
-                                                     putMVar, takeMVar)
-import           Control.Exception                  (ErrorCall (ErrorCall),
-                                                     throwIO)
-import           Control.Monad                      (foldM, void, (<=<), (>=>))
-import           Data.Bits                          (shiftR, (.&.))
-import qualified Data.ByteString                    as S
-import qualified Data.ByteString.Base64             as Base64
-import           Data.ByteString.Char8              ()
-import qualified Data.ByteString.Lazy               as L
-import           Data.Char                          (isAscii, isControl)
-import           Data.List                          (intersperse)
-import           Data.Monoid
-import           Data.String                        (IsString (..))
-import           Data.Text                          (Text)
-import qualified Data.Text                          as T
-import qualified Data.Text.Encoding                 as TE
-import qualified Data.Text.Lazy                     as LT
-import qualified Data.Text.Lazy.Encoding            as LT
-import           Data.Word                          (Word8)
-import           GHC.Generics                       (Generic)
-import           System.Exit
-import           System.FilePath                    (takeFileName)
-import           System.IO
-import           System.Process
-import           System.Random
+import qualified Data.ByteString.Lazy as L
+import Blaze.ByteString.Builder.Char.Utf8
+import Blaze.ByteString.Builder
+import Control.Concurrent (forkIO, putMVar, takeMVar, newEmptyMVar)
+import Data.Monoid
+import System.Random
+import Control.Arrow
+import System.Process
+import System.IO
+import System.Exit
+import System.FilePath (takeFileName)
+import qualified Data.ByteString.Base64 as Base64
+import Control.Monad ((<=<), (>=>), foldM, void)
+import Control.Exception (throwIO, ErrorCall (ErrorCall))
+import Data.List (intersperse)
+import qualified Data.Text.Lazy as LT
+import qualified Data.Text.Lazy.Encoding as LT
+import Data.ByteString.Char8 ()
+import Data.Bits ((.&.), shiftR)
+import Data.Char (isAscii, isControl)
+import Data.Word (Word8)
+import Data.String (IsString(..))
+import qualified Data.ByteString as S
+import Data.Text (Text)
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
+import GHC.Generics (Generic)
 
 -- | Generates a random sequence of alphanumerics of the given length.
 randomString :: RandomGen d => Int -> d -> (String, d)
@@ -102,10 +98,10 @@ instance Random Boundary where
 
 -- | An entire mail message.
 data Mail = Mail
-    { mailFrom    :: Address
-    , mailTo      :: [Address]
-    , mailCc      :: [Address]
-    , mailBcc     :: [Address]
+    { mailFrom :: Address
+    , mailTo   :: [Address]
+    , mailCc   :: [Address]
+    , mailBcc  :: [Address]
     -- | Other headers, excluding from, to, cc and bcc.
     , mailHeaders :: Headers
     -- | A list of different sets of alternatives. As a concrete example:
@@ -114,7 +110,7 @@ data Mail = Mail
     --
     -- Make sure when specifying alternatives to place the most preferred
     -- version last.
-    , mailParts   :: [Alternatives]
+    , mailParts :: [Alternatives]
     }
   deriving (Show, Generic)
 
@@ -149,13 +145,13 @@ type Alternatives = [Part]
 
 -- | A single part of a multipart message.
 data Part = Part
-    { partType        :: Text -- ^ content type
-    , partEncoding    :: Encoding
+    { partType :: Text -- ^ content type
+    , partEncoding :: Encoding
     -- | The filename for this part, if it is to be sent with an attachemnt
     -- disposition.
     , partDisposition :: Disposition
-    , partHeaders     :: Headers
-    , partContent     :: PartContent
+    , partHeaders :: Headers
+    , partContent :: PartContent
     }
   deriving (Eq, Show, Generic)
 
@@ -168,11 +164,7 @@ data Disposition = AttachmentDisposition Text
                  | DefaultDisposition
                  deriving (Show, Eq, Generic)
 
-data Header = Header (S.ByteString, Text)
-            | ContentDispositionHeader (S.ByteString, Text)
-    deriving (Show, Eq)
-
-type Headers = [ Header ]
+type Headers = [(S.ByteString, Text)]
 
 data Pair = Pair (Headers, Builder)
           | CompoundPair (Headers, [Pair])
@@ -182,19 +174,19 @@ partToPair (Part contentType encoding disposition headers (PartContent content))
     Pair (headers', builder)
   where
     headers' =
-        ((:) (Header ("Content-Type", contentType)))
+        ((:) ("Content-Type", contentType))
       $ (case encoding of
             None -> id
-            Base64 -> (:) (Header ("Content-Transfer-Encoding", "base64"))
+            Base64 -> (:) ("Content-Transfer-Encoding", "base64")
             QuotedPrintableText ->
-                (:) (Header ("Content-Transfer-Encoding", "quoted-printable"))
+                (:) ("Content-Transfer-Encoding", "quoted-printable")
             QuotedPrintableBinary ->
-                (:) (Header ("Content-Transfer-Encoding", "quoted-printable")))
+                (:) ("Content-Transfer-Encoding", "quoted-printable"))
       $ (case disposition of
             AttachmentDisposition fn ->
-                (:) (ContentDispositionHeader ("attachment", fn))
+                (:) ("Content-Disposition", "attachment; filename=" `T.append` fn)
             InlineDisposition cid ->
-                (:) (ContentDispositionHeader ("inline", cid)) . (:) (Header ("Content-ID", "<" <> cid <> ">")) . (:) (Header ("Content-Location", cid))
+                (:) ("Content-Disposition", "inline; filename=" `T.append` cid) . (:) ("Content-ID", "<" <> cid <> ">") . (:) ("Content-Location", cid)
             DefaultDisposition -> id
         )
       $ headers
@@ -207,7 +199,7 @@ partToPair (Part contentType encoding disposition headers (PartContent content))
 partToPair (Part contentType encoding disposition headers (NestedParts parts)) =
     CompoundPair (headers', pairs)
   where
-    headers' = (Header ("Content-Type", contentType)):headers
+    headers' = ("Content-Type", contentType):headers
     pairs = map partToPair parts
 
 
@@ -224,7 +216,7 @@ showPairs mtype parts gen =
   where
     (Boundary b, gen') = random gen
     headers =
-        [ Header ("Content-Type", T.concat
+        [ ("Content-Type", T.concat
             [ "multipart/"
             , mtype
             , "; boundary=\""
@@ -248,7 +240,7 @@ flattenCompoundPair (CompoundPair (hs, pairs)) gen =
   where
     (Boundary b, gen') = random gen
     headers =
-        [ Header ("Content-Type", T.concat
+        [ ("Content-Type", T.concat
             [ "multipart/related" , "; boundary=\"" , b , "\"" ])
         ]
     builder = mconcat
@@ -291,7 +283,7 @@ renderMail g0 (Mail from to cc bcc headers parts) =
     builder = mconcat
         [ mconcat addressHeaders
         , mconcat $ map showHeader headers
-        , showHeader $ Header ("MIME-Version", "1.0")
+        , showHeader ("MIME-Version", "1.0")
         , mconcat $ map showHeader finalHeaders
         , fromByteString "\n"
         , finalBuilder
@@ -310,19 +302,11 @@ renderAddress address =
 sanitizeFieldName :: S.ByteString -> S.ByteString
 sanitizeFieldName = S.filter (\w -> w >= 33 && w <= 126 && w /= 58)
 
-showHeader :: Header -> Builder
-showHeader (Header (k, v)) = mconcat
+showHeader :: (S.ByteString, Text) -> Builder
+showHeader (k, v) = mconcat
     [ fromByteString (sanitizeFieldName k)
     , fromByteString ": "
     , encodeIfNeeded (sanitizeHeader v)
-    , fromByteString "\n"
-    ]
-
-showHeader (ContentDispositionHeader (cd, fn)) = mconcat
-    [ fromByteString "Content-Disposition: "
-    , fromByteString cd
-    , fromByteString "; filename="
-    , encodeIfNeeded fn
     , fromByteString "\n"
     ]
 
@@ -499,8 +483,8 @@ simpleMailInMemory to from subject plainBody htmlBody attachments =
 
 data InlineImage = InlineImage {
       imageContentType :: Text
-    , imageContent     :: ImageContent
-    , imageCID         :: Text
+    , imageContent :: ImageContent
+    , imageCID :: Text
     } deriving Show
 
 data ImageContent = ImageFilePath FilePath | ImageByteString L.ByteString
@@ -527,7 +511,7 @@ simpleMailWithImages to from subject plainBody htmlBody images attachments = do
     addAttachments attachments
       . addPart [ plainPart plainBody
                 , relatedPart ((htmlPart htmlBody):inlineImageParts) ]
-      $ (emptyMail from) { mailTo = to, mailHeaders = [Header ("Subject", subject)] }
+      $ (emptyMail from) { mailTo = to, mailHeaders = [("Subject", subject)] }
 
 mailFromToSubject :: Address -- ^ from
                   -> Address -- ^ to
@@ -535,7 +519,7 @@ mailFromToSubject :: Address -- ^ from
                   -> Mail
 mailFromToSubject from to subject =
     (emptyMail from) { mailTo = [to]
-                     , mailHeaders = [Header ("Subject", subject)]
+                     , mailHeaders = [("Subject", subject)]
                      }
 
 -- | Add an 'Alternative' to the 'Mail's parts.
@@ -592,7 +576,7 @@ addAttachments xs mail = foldM fun mail xs
 addImage :: InlineImage -> IO Part
 addImage InlineImage{..} = do
     content <- case imageContent of
-                ImageFilePath fn   -> L.readFile fn
+                ImageFilePath fn -> L.readFile fn
                 ImageByteString bs -> return bs
     return
       $ Part imageContentType Base64 (InlineDisposition imageCID) [] (PartContent content)

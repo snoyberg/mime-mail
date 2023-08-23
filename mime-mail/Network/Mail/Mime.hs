@@ -38,6 +38,7 @@ module Network.Mail.Mime
     , plainPart
     , filePart
     , filePartBS
+    , httpFilePart
     , randomString
     , quotedPrintable
     , relatedPart
@@ -552,6 +553,15 @@ filePart :: Text -> FilePath -> IO Part
 filePart ct fn = do
     content <- L.readFile fn
     return $ filePartBS ct (T.pack (takeFileName fn)) content
+
+-- | Construct a BASE64-encoded file attachment 'Part' from a network path
+httpFilePart :: Text -> FilePath -> IO Part
+httpFilePart ct url = do
+    let fileName = Prelude.last $ T.splitOn "/" url
+    req <- parseRequest $ T.unpack url
+    resp <- httpBS req
+    let content = getResponseBody resp
+    return $ filePartBS ct fileName $ L.pack $ B.unpack content
 
 -- | Construct a BASE64-encoded file attachment 'Part'
 --

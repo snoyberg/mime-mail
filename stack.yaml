@@ -1,4 +1,4 @@
-resolver: lts-11.5
+resolver: nightly-2026-01-19
 packages:
 - mime-mail/
 - mime-mail-ses/

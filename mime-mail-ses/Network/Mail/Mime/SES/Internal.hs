@@ -4,9 +4,10 @@
 
 module Network.Mail.Mime.SES.Internal where
 
-import           Crypto.Hash                 (SHA256, hmac, hmacGetDigest, hash)
+import           Crypto.Hash                 (SHA256, hash)
+import           Crypto.MAC.HMAC             (hmac, hmacGetDigest)
 import           Data.Bifunctor              (bimap)
-import           Data.Byteable               (toBytes)
+import           Data.ByteArray              (convert)
 import           Data.ByteString             (ByteString)
 import qualified Data.ByteString             as B
 import           Data.ByteString.Base16      as Base16
@@ -134,7 +135,7 @@ bytesToLowerCase :: ByteString -> ByteString
 bytesToLowerCase = S8.pack . fmap toLower . S8.unpack
 
 unaryHashBase16 :: ByteString -> ByteString
-unaryHashBase16 = Base16.encode . toBytes . hash @SHA256
+unaryHashBase16 = Base16.encode . convert . hash @ByteString @SHA256
 
 keyedHash :: ByteString -> ByteString -> ByteString
-keyedHash key payload = toBytes . hmacGetDigest $ hmac @SHA256 key payload
+keyedHash key payload = convert . hmacGetDigest $ hmac @ByteString @ByteString @SHA256 key payload

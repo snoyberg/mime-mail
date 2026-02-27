@@ -20,12 +20,13 @@ import           Data.ByteString             (ByteString)
 import           Data.ByteString.Base64      (encode)
 import qualified Data.ByteString.Char8       as S8
 import qualified Data.ByteString.Lazy        as L
-import           Data.Conduit                (Sink, await, ($$), (=$))
+import           Data.Conduit                (ConduitT, await, connect, (.|))
 import           Data.Text                   (Text)
 import qualified Data.Text                   as T
 import qualified Data.Text.Encoding          as E
 import           Data.Time                   (getCurrentTime)
 import           Data.Typeable               (Typeable)
+import           Data.Void                   (Void)
 import           Data.XML.Types              (Content (ContentText), Event (EventBeginElement, EventContent))
 import           Network.HTTP.Client         (Manager,
                                               requestHeaders, responseBody,
@@ -73,7 +74,7 @@ sendMailSES manager ses msg =
 -- Generalised version of 'sendMailSES' which allows customising the final return type.
 sendMailSESWithResponse :: MonadIO m => Manager -> SES
                         -> L.ByteString
-                        -> (Status -> Sink Event IO a)
+                        -> (Status -> ConduitT Event Void IO a)
                         -- ^ What to do with the HTTP 'Status' returned in the 'Response'.
                         -> m a
 sendMailSESWithResponse manager ses msg onResponseStatus = liftIO $ do
@@ -93,9 +94,10 @@ sendMailSESWithResponse manager ses msg onResponseStatus = liftIO $ do
                               (patchedRequestHeaders tentativeRequest) (sesAccessKey ses) sig
         finalRequest = tentativeRequest {requestHeaders = ("Authorization", authorizationString): requestHeaders tentativeRequest}
     withResponse finalRequest manager $ \res ->
-           bodyReaderSource (responseBody res)
-        $$ parseBytes def
-        =$ onResponseStatus (responseStatus res)
+           bodyReaderSource (responseBody res) `connect`
+             (parseBytes def
+                .| onResponseStatus (responseStatus res)
+             )
   where
     qs =
           ("Action", "SendRawEmail")
@@ -117,7 +119,7 @@ sendMailSESGlobal ses msg = do
   mgr <- liftIO getGlobalManager
   sendMailSES mgr ses msg
 
-checkForError :: Status -> Sink Event IO ()
+checkForError :: Status -> ConduitT Event Void IO ()
 checkForError status = do
     name <- getFirstStart
     if name == errorResponse

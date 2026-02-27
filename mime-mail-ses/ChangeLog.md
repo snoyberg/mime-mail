@@ -1,3 +1,9 @@
+## 0.4.4
+
+* Use `crypton` instead of `cryptohash` as a dependency. `cryptohash` is abandoned.
+* Avoid deprecated conduit functions.
+* New maintainer: Janus Troelsen
+
 ## 0.4.3
 
 * Add function 'sendMailSESWithResponse'.

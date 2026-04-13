@@ -1,3 +1,7 @@
+## 0.5.2
+
+* Add `Eq` instance for `Mail`
+
 ## 0.5.1
 
 * Add `Generic` instances for types used in `Mail`

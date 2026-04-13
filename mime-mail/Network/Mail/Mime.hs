@@ -111,7 +111,7 @@ data Mail = Mail
     -- version last.
     , mailParts :: [Alternatives]
     }
-  deriving (Show, Generic)
+  deriving (Eq, Show, Generic)
 
 -- | A mail message with the provided 'from' address and no other
 -- fields filled in.

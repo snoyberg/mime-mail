@@ -1,6 +1,5 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE CPP #-}
 
 module Network.Mail.Mime.SES.Internal where
 
@@ -17,27 +16,14 @@ import           Data.Char                   (toLower)
 import           Data.CaseInsensitive        (CI)
 import qualified Data.CaseInsensitive        as CI
 import           Data.List                   (sort)
-#if MIN_VERSION_base(4, 11, 0)
-#else
-import           Data.Monoid ((<>))
-#endif
 
 import           Data.Time                   (UTCTime)
 import           Data.Time.Format            (formatTime)
 import           Network.HTTP.Client         (Request, RequestBody(RequestBodyLBS, RequestBodyBS),
-#if MIN_VERSION_http_client(0, 5, 0)
                                              parseRequest,
-#else
-                                             checkStatus,
-                                             parseUrl,
-#endif
                                              method, host, path, requestHeaders, queryString, requestBody
                                              )
-#if MIN_VERSION_time(1,5,0)
 import           Data.Time                   (defaultTimeLocale)
-#else
-import           System.Locale               (defaultTimeLocale)
-#endif
 
 -- | Create a canonical request according to <https://docs.aws.amazon.com/general/latest/gr/sigv4-create-canonical-request.html>.
 makeCanonicalRequest :: ByteString -> ByteString -> ByteString -> [(CI ByteString, ByteString)] -> ByteString -> ByteString
@@ -101,11 +87,7 @@ formatAmazonDate = S8.pack . formatTime defaultTimeLocale "%Y%m%d"
 
 buildRequest :: String -> IO Request
 buildRequest url = do
-#if MIN_VERSION_http_client(0, 5, 0)
   requestBase <- (parseRequest url)
-#else
-  requestBase <- parseUrl url {checkStatus = \_ _ _ -> Nothing}
-#endif
   return requestBase
 
 requestBodyAsByteString :: Request -> ByteString

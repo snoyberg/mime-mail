@@ -1,3 +1,9 @@
+## 0.4.5
+
+* Bump lower dependency bounds
+* Remove CPP
+* Use `ram` instead of `memory` as a dependency. `memory` is abandoned.
+
 ## 0.4.4
 
 * Use `crypton` instead of `cryptohash` as a dependency. `cryptohash` is abandoned.

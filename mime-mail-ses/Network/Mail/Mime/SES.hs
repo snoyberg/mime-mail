@@ -1,6 +1,5 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE CPP #-}
 module Network.Mail.Mime.SES
     ( sendMailSES
     , sendMailSESWithResponse

@@ -43,6 +43,7 @@ module Network.Mail.Mime
     , relatedPart
     , addImage
     , mkImageParts
+    , encodeIfNeeded
     ) where
 
 import qualified Data.ByteString.Lazy as L

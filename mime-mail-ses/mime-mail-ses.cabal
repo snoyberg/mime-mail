@@ -22,7 +22,7 @@ Library
                      , bytestring         >= 0.11.4    && < 0.13
                      , case-insensitive   ^>= 1.2
                      , conduit            ^>= 1.3
-                     , crypton            ^>= 1.1
+                     , crypton            ^>= 2.1
                      , http-client        ^>= 0.7
                      , http-client-tls    ^>= 0.4
                      , http-conduit       ^>= 2.3

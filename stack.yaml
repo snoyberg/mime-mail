@@ -1,4 +1,8 @@
-resolver: nightly-2026-01-19
+resolver: nightly-2026-09-27
 packages:
 - mime-mail/
 - mime-mail-ses/
+
+extra-deps:
+  - github: kazu-yamamoto/crypton
+    commit: 9d344f20767eb9a0f2ed65402f437ce0de1d028f

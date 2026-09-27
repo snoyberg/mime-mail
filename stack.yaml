@@ -5,4 +5,4 @@ packages:
 
 extra-deps:
   - github: kazu-yamamoto/crypton
-    commit: 9d344f20767eb9a0f2ed65402f437ce0de1d028f
+    commit: 3400efd06aa6ea776a6416b69891981904f88ffc
